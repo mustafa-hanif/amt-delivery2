@@ -86,6 +86,8 @@ export default defineSchema({
     phone: v.string(),
     vehicleType: driverTypeEnum,
     licenseNumber: v.optional(v.string()),
+    password: v.optional(v.string()),
+    areaCoverage: v.optional(v.string()),
     isActive: v.boolean(),
     currentLatitude: v.optional(v.number()),
     currentLongitude: v.optional(v.number()),
@@ -95,4 +97,6 @@ export default defineSchema({
     updatedAt: v.string(),
   }).index("by_vehicle_type", ["vehicleType"])
     .index("by_active", ["isActive"])
+    .index("by_area", ["areaCoverage"])
+    .index("by_phone", ["phone"])
 });

@@ -188,11 +188,17 @@ export const createDriver = mutation({
       v.literal("van")
     ),
     licenseNumber: v.optional(v.string()),
+    password: v.optional(v.string()),
+    areaCoverage: v.optional(v.string()),
   },
   handler: async (ctx: MutationCtx, args) => {
     const now = new Date().toISOString();
+    // Generate a default password if not provided (last 4 digits of phone)
+    const defaultPassword = args.password || args.phone.slice(-4);
+    
     return await ctx.db.insert("drivers", {
       ...args,
+      password: defaultPassword,
       isActive: true,
       rating: 5.0,
       totalDeliveries: 0,
@@ -214,6 +220,8 @@ export const updateDriver = mutation({
       v.literal("van")
     ),
     licenseNumber: v.optional(v.string()),
+    password: v.optional(v.string()),
+    areaCoverage: v.optional(v.string()),
     isActive: v.boolean(),
     rating: v.optional(v.number()),
   },

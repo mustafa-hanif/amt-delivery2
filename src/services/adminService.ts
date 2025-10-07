@@ -284,6 +284,8 @@ export class AdminService {
       phone: record.phone,
       vehicleType: record.vehicleType,
       licenseNumber: record.licenseNumber,
+      password: record.password,
+      areaCoverage: record.areaCoverage,
       isActive: record.isActive,
       currentLatitude: record.currentLatitude,
       currentLongitude: record.currentLongitude,

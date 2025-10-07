@@ -4,7 +4,11 @@ import { deliveryService } from "../services/deliveryService";
 import type { DeliveryWithDistance, Delivery, DriverLocation } from "../types";
 import { MapPin, RefreshCw } from "lucide-react";
 
-export function DeliveryList() {
+interface DeliveryListProps {
+  driverId?: string;
+}
+
+export function DeliveryList({ driverId }: DeliveryListProps) {
   const [deliveries, setDeliveries] = useState<DeliveryWithDistance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

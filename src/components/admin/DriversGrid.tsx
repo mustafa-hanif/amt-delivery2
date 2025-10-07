@@ -14,6 +14,8 @@ interface NewDriverRow {
   phone: string;
   vehicleType: 'car' | 'bike' | 'scooter' | 'van';
   licenseNumber: string;
+  password: string;
+  areaCoverage: string;
 }
 
 export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }: DriversGridProps) {
@@ -24,7 +26,9 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
     name: '',
     phone: '',
     vehicleType: 'car',
-    licenseNumber: ''
+    licenseNumber: '',
+    password: '',
+    areaCoverage: ''
   });
   const [saving, setSaving] = useState(false);
 
@@ -57,6 +61,8 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
       phone: editingData.phone!,
       vehicleType: editingData.vehicleType!,
       licenseNumber: editingData.licenseNumber,
+      password: editingData.password,
+      areaCoverage: editingData.areaCoverage,
       isActive: editingData.isActive!,
       rating: editingData.rating,
     });
@@ -74,7 +80,9 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
       name: '',
       phone: '',
       vehicleType: 'car',
-      licenseNumber: ''
+      licenseNumber: '',
+      password: '',
+      areaCoverage: ''
     });
   };
 
@@ -84,7 +92,9 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
       name: '',
       phone: '',
       vehicleType: 'car',
-      licenseNumber: ''
+      licenseNumber: '',
+      password: '',
+      areaCoverage: ''
     });
   };
 
@@ -103,6 +113,8 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
       phone: newDriver.phone.trim(),
       vehicleType: newDriver.vehicleType,
       licenseNumber: newDriver.licenseNumber.trim() || undefined,
+      password: newDriver.password.trim() || undefined,
+      areaCoverage: newDriver.areaCoverage.trim() || undefined,
     });
 
     if (success) {
@@ -173,7 +185,13 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
                 Phone
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Login Info
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Vehicle Type
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Area Coverage
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 License
@@ -229,6 +247,26 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
                     )}
                   </td>
 
+                  {/* Login Info */}
+                  <td className="px-4 py-3">
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editingData.password || ''}
+                        onChange={(e) => setEditingData(prev => ({ ...prev, password: e.target.value }))}
+                        onKeyDown={handleKeyDown}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="Password"
+                        disabled={saving}
+                      />
+                    ) : (
+                      <div className="text-xs bg-gray-50 p-2 rounded border border-gray-200">
+                        <div className="font-medium text-gray-700">ID: {driver.phone}</div>
+                        <div className="text-gray-600">PW: {driver.password || '****'}</div>
+                      </div>
+                    )}
+                  </td>
+
                   {/* Vehicle Type */}
                   <td className="px-4 py-3">
                     {isEditing ? (
@@ -248,6 +286,23 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getVehicleColor(driver.vehicleType)}`}>
                         {getVehicleIcon(driver.vehicleType)} {driver.vehicleType.charAt(0).toUpperCase() + driver.vehicleType.slice(1)}
                       </span>
+                    )}
+                  </td>
+
+                  {/* Area Coverage */}
+                  <td className="px-4 py-3">
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editingData.areaCoverage || ''}
+                        onChange={(e) => setEditingData(prev => ({ ...prev, areaCoverage: e.target.value }))}
+                        onKeyDown={handleKeyDown}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="City/Region"
+                        disabled={saving}
+                      />
+                    ) : (
+                      <div className="text-sm text-gray-900">{driver.areaCoverage || '-'}</div>
                     )}
                   </td>
 
@@ -376,6 +431,16 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
                   />
                 </td>
                 <td className="px-4 py-3">
+                  <input
+                    type="text"
+                    value={newDriver.password}
+                    onChange={(e) => setNewDriver(prev => ({ ...prev, password: e.target.value }))}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                    placeholder="Password (last 4 of phone if blank)"
+                    disabled={saving}
+                  />
+                </td>
+                <td className="px-4 py-3">
                   <select
                     value={newDriver.vehicleType}
                     onChange={(e) => setNewDriver(prev => ({ ...prev, vehicleType: e.target.value as any }))}
@@ -387,6 +452,16 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
                     <option value="scooter">Scooter</option>
                     <option value="van">Van</option>
                   </select>
+                </td>
+                <td className="px-4 py-3">
+                  <input
+                    type="text"
+                    value={newDriver.areaCoverage}
+                    onChange={(e) => setNewDriver(prev => ({ ...prev, areaCoverage: e.target.value }))}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                    placeholder="City/Region"
+                    disabled={saving}
+                  />
                 </td>
                 <td className="px-4 py-3">
                   <input
@@ -430,7 +505,7 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
             {/* Empty state */}
             {drivers.length === 0 && !showNewRow && (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                   No drivers found. Click "Add New Row" to create your first driver.
                 </td>
               </tr>

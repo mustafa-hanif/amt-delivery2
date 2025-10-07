@@ -76,7 +76,9 @@ export interface Driver {
   phone: string;
   vehicleType: 'car' | 'bike' | 'scooter' | 'van';
   licenseNumber?: string;
+  password?: string; // Driver's login password
   isActive: boolean;
+  areaCoverage?: string; // City or region this driver covers
   currentLatitude?: number;
   currentLongitude?: number;
   rating?: number;
