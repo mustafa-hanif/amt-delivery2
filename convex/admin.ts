@@ -333,6 +333,16 @@ export const createOrder = mutation({
   },
 });
 
+export const deleteOrder = mutation({
+  args: {
+    id: v.id("deliveries"),
+  },
+  handler: async (ctx: MutationCtx, args) => {
+    await ctx.db.delete(args.id);
+    return true;
+  },
+});
+
 export const assignDriverToOrder = mutation({
   args: {
     orderId: v.id("deliveries"),

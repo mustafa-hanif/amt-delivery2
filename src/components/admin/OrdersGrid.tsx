@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Edit2, Truck, Plus, X, Check, Loader2 } from "lucide-react";
+import { Edit2, Truck, Plus, X, Check, Loader2, Trash2 } from "lucide-react";
 import type { Delivery, Customer, Product, Driver } from "../../types";
 
 // Function to extract lat/lng from Google Maps URL
@@ -52,10 +52,11 @@ interface OrdersGridProps {
     latitude?: number;
     longitude?: number;
   }) => Promise<boolean>;
+  onDeleteOrder?: (orderId: string) => Promise<boolean>;
   onAssignDriver?: (order: Delivery) => void;
 }
 
-export function OrdersGrid({ orders, customers, products, drivers, loading, onUpdateOrder, onCreateOrder, onAssignDriver }: OrdersGridProps) {
+export function OrdersGrid({ orders, customers, products, drivers, loading, onUpdateOrder, onCreateOrder, onDeleteOrder, onAssignDriver }: OrdersGridProps) {
   const [localOrders, setLocalOrders] = useState<Delivery[]>(orders);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<Partial<Delivery>>({});
@@ -69,6 +70,14 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     longitude: undefined as number | undefined,
   });
   const [saving, setSaving] = useState(false);
+  const [showMagicBox, setShowMagicBox] = useState(false);
+  const [magicBoxData, setMagicBoxData] = useState('');
+  const [parsedOrders, setParsedOrders] = useState<Array<{
+    customerName: string;
+    customerPhone: string;
+    productName: string;
+    notes?: string;
+  }>>([]);
 
   // Update local orders when props change
   useEffect(() => {
@@ -83,6 +92,77 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
   const cancelEdit = () => {
     setEditingId(null);
     setEditingData({});
+  };
+
+  const parseMagicBoxData = (data: string) => {
+    const lines = data.trim().split('\n');
+    const parsed: Array<{
+      customerName: string;
+      customerPhone: string;
+      productName: string;
+      notes?: string;
+    }> = [];
+
+    for (const line of lines) {
+      const columns = line.split('\t'); // Excel uses tabs
+      if (columns.length >= 3) {
+        parsed.push({
+          customerName: columns[0]?.trim() || '',
+          customerPhone: columns[1]?.trim() || '',
+          productName: columns[2]?.trim() || '',
+          notes: columns[3]?.trim() || undefined,
+        });
+      }
+    }
+
+    return parsed;
+  };
+
+  const handleMagicBoxPaste = (e: React.ClipboardEvent) => {
+    const pastedData = e.clipboardData.getData('text');
+    setMagicBoxData(pastedData);
+    const parsed = parseMagicBoxData(pastedData);
+    setParsedOrders(parsed);
+  };
+
+  const importMagicBoxOrders = async () => {
+    if (!onCreateOrder || parsedOrders.length === 0) return;
+
+    setSaving(true);
+    let successCount = 0;
+    
+    for (const order of parsedOrders) {
+      // Find matching customer by name or phone
+      const customer = customers.find(c => 
+        c.name.toLowerCase() === order.customerName.toLowerCase() ||
+        c.phone === order.customerPhone
+      );
+      
+      // Find matching product by name
+      const product = products.find(p => 
+        p.title.toLowerCase().includes(order.productName.toLowerCase())
+      );
+
+      if (customer && product) {
+        const success = await onCreateOrder({
+          customerId: customer._id,
+          productId: product._id,
+          priority: 'medium',
+          notes: order.notes,
+          latitude: undefined,
+          longitude: undefined,
+        });
+        
+        if (success) successCount++;
+      }
+    }
+
+    setSaving(false);
+    setShowMagicBox(false);
+    setMagicBoxData('');
+    setParsedOrders([]);
+    
+    alert(`Successfully imported ${successCount} out of ${parsedOrders.length} orders!`);
   };
 
   const handleLocationPaste = (e: React.ClipboardEvent, isEditing: boolean) => {
@@ -143,6 +223,24 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       setLocalOrders(orders);
     }
     setSaving(false);
+  };
+
+  const handleDeleteOrder = async (orderId: string, customerName: string) => {
+    if (!onDeleteOrder) return;
+    
+    const confirmed = window.confirm(`Are you sure you want to delete the order for ${customerName}? This action cannot be undone.`);
+    if (!confirmed) return;
+    
+    // Optimistically remove from UI
+    setLocalOrders(prevOrders => prevOrders.filter(order => order._id !== orderId));
+    
+    const success = await onDeleteOrder(orderId);
+    
+    if (!success) {
+      // Revert on failure
+      setLocalOrders(orders);
+      alert('Failed to delete order. Please try again.');
+    }
   };
 
   const startNewOrder = () => {
@@ -239,8 +337,92 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
           <h3 className="text-lg font-semibold text-gray-800">Orders</h3>
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-500">{orders.length} total</span>
+            <button
+              onClick={() => setShowMagicBox(!showMagicBox)}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              <Plus size={18} /> Magic Box
+            </button>
+            {!showNewRow && onCreateOrder && (
+              <button
+                onClick={startNewOrder}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Plus size={18} /> Add New Row
+              </button>
+            )}
           </div>
         </div>
+        
+        {/* Magic Box Section */}
+        {showMagicBox && (
+          <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+            <div className="mb-3">
+              <h4 className="font-semibold text-purple-800 mb-1">Bulk Import Orders from Excel</h4>
+              <p className="text-sm text-purple-600">
+                Paste Excel data with columns: <strong>Customer Name | Phone | Product | Notes</strong>
+              </p>
+            </div>
+            
+            <textarea
+              value={magicBoxData}
+              onChange={(e) => setMagicBoxData(e.target.value)}
+              onPaste={handleMagicBoxPaste}
+              placeholder="Paste your Excel data here (tab-separated)..."
+              className="w-full h-32 p-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+            
+            {parsedOrders.length > 0 && (
+              <div className="mt-3">
+                <p className="text-sm font-medium text-purple-700 mb-2">
+                  Preview: {parsedOrders.length} orders detected
+                </p>
+                <div className="max-h-48 overflow-y-auto bg-white border border-purple-200 rounded">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-purple-100 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-purple-800">Customer</th>
+                        <th className="px-3 py-2 text-left text-purple-800">Phone</th>
+                        <th className="px-3 py-2 text-left text-purple-800">Product</th>
+                        <th className="px-3 py-2 text-left text-purple-800">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parsedOrders.map((order, idx) => (
+                        <tr key={idx} className="border-t border-purple-100">
+                          <td className="px-3 py-2">{order.customerName || '—'}</td>
+                          <td className="px-3 py-2">{order.customerPhone || '—'}</td>
+                          <td className="px-3 py-2">{order.productName || '—'}</td>
+                          <td className="px-3 py-2 text-gray-600">{order.notes || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                onClick={importMagicBoxOrders}
+                disabled={parsedOrders.length === 0}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Import {parsedOrders.length > 0 ? `${parsedOrders.length} Orders` : 'Orders'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowMagicBox(false);
+                  setMagicBoxData('');
+                  setParsedOrders([]);
+                }}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -263,9 +445,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Priority
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Notes
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -279,7 +458,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
           <tbody className="bg-white divide-y divide-gray-200">
             {localOrders.length === 0 && !showNewRow ? (
               <tr>
-                <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
                   No orders found. Use the 🛒 button in the Customers tab to create orders.
                 </td>
               </tr>
@@ -393,24 +572,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {editingId === order._id ? (
-                      <select
-                        value={editingData.priority || order.priority}
-                        onChange={(e) => setEditingData({ ...editingData, priority: e.target.value as any })}
-                        className="border border-gray-300 rounded px-2 py-1 text-xs"
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                        <option value="urgent">Urgent</option>
-                      </select>
-                    ) : (
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(order.priority)}`}>
-                        {order.priority.toUpperCase()}
-                      </span>
-                    )}
-                  </td>
                   <td className="px-6 py-4 text-sm text-gray-900">
                     {editingId === order._id ? (
                       <textarea
@@ -493,6 +654,15 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                         >
                           <Edit2 size={16} />
                         </button>
+                        {onDeleteOrder && (
+                          <button
+                            onClick={() => handleDeleteOrder(order._id, order.customerName)}
+                            className="text-red-600 hover:text-red-900 flex items-center gap-1"
+                            title="Delete Order"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -541,19 +711,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 </td>
                 <td className="px-6 py-4 text-center text-gray-400 text-sm">
                   Pending
-                </td>
-                <td className="px-6 py-4">
-                  <select
-                    value={newOrder.priority}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, priority: e.target.value as any }))}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                    disabled={saving}
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
                 </td>
                 <td className="px-6 py-4">
                   <textarea

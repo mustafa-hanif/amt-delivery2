@@ -48,7 +48,23 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
       if (driverLocation) {
         // Sort by distance if we have driver location
         const sortedDeliveries = deliveryService.sortDeliveriesByDistance(deliveriesData, driverLocation);
-        setDeliveries(sortedDeliveries);
+        
+        // Mark deliveries with invalid coordinates (0, 0) as location unknown
+        const deliveriesWithValidation = sortedDeliveries.map(delivery => {
+          // Debug log
+          console.log('Delivery:', delivery.customerName, 'Coords:', delivery.latitude, delivery.longitude, 'Distance:', delivery.distanceText);
+          
+          if (!delivery.latitude || !delivery.longitude || (delivery.latitude === 0 && delivery.longitude === 0)) {
+            return {
+              ...delivery,
+              distance: 0,
+              distanceText: 'Location unknown'
+            };
+          }
+          return delivery;
+        });
+        
+        setDeliveries(deliveriesWithValidation);
       } else {
         // Convert to DeliveryWithDistance format without distance sorting
         const deliveriesWithDistance = deliveriesData.map(delivery => ({
@@ -142,9 +158,14 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
               <span className="text-sm text-gray-600 flex items-center gap-1">
                 <MapPin size={12} />
                 <div>
-                Location: {locationPermission === null ? 'Checking...' :
-                  locationPermission ? 'Enabled' : 'Disabled'}
-                  </div>
+                  Location: {locationPermission === null ? 'Checking...' :
+                    locationPermission ? 'Enabled' : 'Disabled'}
+                  {driverLocation && (
+                    <span className="ml-2 text-xs font-mono bg-blue-50 px-2 py-1 rounded">
+                      ({driverLocation.latitude.toFixed(6)}, {driverLocation.longitude.toFixed(6)})
+                    </span>
+                  )}
+                </div>
               </span>
               {driverLocation && (
                 <span className="text-xs text-gray-500">
@@ -154,9 +175,9 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
             </div>
             <button
               onClick={refreshLocation}
-              className="text-blue-500 hover:text-blue-600 text-sm underline"
+              className="text-blue-500 hover:text-blue-600 text-sm underline flex items-center gap-1"
             >
-              Refresh Location
+              <RefreshCw size={14} /> Refresh
             </button>
           </div>
         </div>

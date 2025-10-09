@@ -217,6 +217,19 @@ export class AdminService {
     }
   }
 
+  async deleteOrder(orderId: string): Promise<boolean> {
+    try {
+      const client = this.getClient();
+      await client.mutation(api.admin.deleteOrder, {
+        id: orderId as any,
+      });
+      return true;
+    } catch (error) {
+      console.error("Error deleting order:", error);
+      return false;
+    }
+  }
+
   async assignDriverToOrder(orderId: string, driverId: string, priority: 'low' | 'medium' | 'high' | 'urgent', notes?: string): Promise<boolean> {
     try {
       const client = this.getClient();

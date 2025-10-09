@@ -370,6 +370,13 @@ export function AdminDashboard() {
               }
               return success;
             }}
+            onDeleteOrder={async (orderId) => {
+              const success = await adminService.deleteOrder(orderId);
+              if (success) {
+                await loadData(); // Refresh data
+              }
+              return success;
+            }}
           />
         )}
       </div>

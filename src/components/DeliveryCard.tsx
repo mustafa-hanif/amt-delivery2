@@ -90,7 +90,7 @@ export function DeliveryCard({ delivery, onStatusUpdate }: DeliveryCardProps) {
           )}
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <span className="flex items-center gap-1">
-              <MapPin size={14} /> {delivery.distanceText} away
+              <MapPin size={14} /> {delivery.distanceText === 'Location unknown' ? delivery.distanceText : `${delivery.distanceText} away`}
             </span>
             {delivery.estimatedDeliveryTime && (
               <span className="flex items-center gap-1">
@@ -98,6 +98,17 @@ export function DeliveryCard({ delivery, onStatusUpdate }: DeliveryCardProps) {
               </span>
             )}
           </div>
+          {/* Debug: Show coordinates */}
+          {delivery.latitude && delivery.longitude && delivery.latitude !== 0 && delivery.longitude !== 0 && (
+            <div className="text-xs text-gray-400 mt-1 font-mono">
+              Destination: ({delivery.latitude.toFixed(6)}, {delivery.longitude.toFixed(6)})
+            </div>
+          )}
+          {(!delivery.latitude || !delivery.longitude || (delivery.latitude === 0 && delivery.longitude === 0)) && (
+            <div className="text-xs text-orange-500 mt-1">
+              ⚠️ No location set for this delivery - add it in admin panel
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-2">
           <span className={`px-2 py-1 rounded-full text-white text-xs font-medium ${getStatusColor(delivery.status)}`}>
