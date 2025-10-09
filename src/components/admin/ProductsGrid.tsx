@@ -5,7 +5,7 @@ import type { Product } from "../../types";
 interface ProductsGridProps {
   products: Product[];
   loading?: boolean;
-  onCreateProduct?: (productData: Omit<Product, '_id' | 'createdAt' | 'updatedAt'>) => Promise<boolean>;
+  onCreateProduct?: (productData: Omit<Product, '_id' | 'createdAt' | 'updatedAt'>) => Promise<string | null>;
   onUpdateProduct?: (productId: string, productData: Omit<Product, '_id' | 'createdAt' | 'updatedAt'>) => Promise<boolean>;
 }
 
@@ -106,7 +106,7 @@ export function ProductsGrid({ products, loading, onCreateProduct, onUpdateProdu
     }
 
     setSaving(true);
-    const success = await onCreateProduct({
+    const id = await onCreateProduct({
       title: newProduct.title.trim(),
       price: newProduct.price,
       description: newProduct.description.trim() || undefined,
@@ -115,7 +115,7 @@ export function ProductsGrid({ products, loading, onCreateProduct, onUpdateProdu
       imageUrl: newProduct.imageUrl.trim() || undefined,
     });
 
-    if (success) {
+    if (id) {
       cancelNewProduct();
     }
     setSaving(false);

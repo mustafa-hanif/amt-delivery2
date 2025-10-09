@@ -69,6 +69,9 @@ export class DeliveryService {
     return {
       _id: convexId,
       externalId: record.externalId,
+      customerId: record.customerId ? String(record.customerId) : undefined,
+      driverId: record.driverId ? String(record.driverId) : undefined,
+      productId: record.productId ? String(record.productId) : undefined,
       customerName: record.customerName ?? "",
       customerPhone: record.customerPhone ?? "",
       customerAddress: record.customerAddress ?? "",

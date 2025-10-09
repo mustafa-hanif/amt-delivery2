@@ -8,7 +8,7 @@ interface CustomersGridProps {
   loading?: boolean;
   onEdit?: (customer: Customer) => void;
   onAddCustomer?: () => void;
-  onCreateCustomer?: (customerData: Omit<Customer, '_id' | 'createdAt' | 'updatedAt' | 'totalOrders'>) => Promise<boolean>;
+  onCreateCustomer?: (customerData: Omit<Customer, '_id' | 'createdAt' | 'updatedAt' | 'totalOrders'>) => Promise<string | null>;
   onUpdateCustomer?: (customerId: string, customerData: Omit<Customer, '_id' | 'createdAt' | 'updatedAt' | 'totalOrders'>) => Promise<boolean>;
   onQuickOrder?: (customerId: string, productId: string) => Promise<boolean>;
   onOrderCreated?: () => void;
@@ -38,69 +38,8 @@ export function CustomersGrid({ customers, products, loading, onEdit, onAddCusto
     address: '',
     city: '',
     country: '',
-    latitude: undefined,
-    longitude: undefined
   });
   const [saving, setSaving] = useState(false);
-
-  // Function to extract lat/lng from Google Maps URL
-  const extractLocationFromUrl = (url: string): { latitude?: number; longitude?: number } => {
-    try {
-      // Pattern 1: https://www.google.com/maps/place/.../@25.2048,55.2708,17z/...
-      // Pattern 2: https://maps.google.com/?q=25.2048,55.2708
-      // Pattern 3: https://goo.gl/maps/... (shortened, harder to parse)
-      // Pattern 4: https://www.google.com/maps?q=25.2048,55.2708
-      // Pattern 5: https://maps.app.goo.gl/... (new Google Maps short links)
-      
-      const patterns = [
-        /@(-?\d+\.\d+),(-?\d+\.\d+)/,  // @lat,lng
-        /q=(-?\d+\.\d+),(-?\d+\.\d+)/,  // q=lat,lng
-        /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/, // !3dlat!4dlng
-      ];
-
-      for (const pattern of patterns) {
-        const match = url.match(pattern);
-        if (match && match[1] && match[2]) {
-          const lat = parseFloat(match[1]);
-          const lng = parseFloat(match[2]);
-          if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-            return { latitude: lat, longitude: lng };
-          }
-        }
-      }
-
-      return {};
-    } catch (error) {
-      console.error('Error parsing location URL:', error);
-      return {};
-    }
-  };
-
-  const handleLocationPaste = (e: React.ClipboardEvent, isEditing: boolean) => {
-    const pastedText = e.clipboardData.getData('text');
-    
-    // Check if it looks like a Google Maps URL
-    if (pastedText.includes('google.com/maps') || pastedText.includes('goo.gl/maps') || pastedText.includes('maps.app.goo.gl')) {
-      e.preventDefault();
-      const location = extractLocationFromUrl(pastedText);
-      
-      if (location.latitude && location.longitude) {
-        if (isEditing) {
-          setEditingData(prev => ({
-            ...prev,
-            latitude: location.latitude,
-            longitude: location.longitude,
-          }));
-        } else {
-          setNewCustomer(prev => ({
-            ...prev,
-            latitude: location.latitude,
-            longitude: location.longitude,
-          }));
-        }
-      }
-    }
-  };
 
   const handleQuickOrder = async (customerId: string) => {
     if (!onQuickOrder || !products || products.length === 0) return;
@@ -210,7 +149,7 @@ export function CustomersGrid({ customers, products, loading, onEdit, onAddCusto
     }
 
     setSaving(true);
-    const success = await onCreateCustomer({
+    const id = await onCreateCustomer({
       name: newCustomer.name.trim(),
       phone: newCustomer.phone.trim(),
       email: newCustomer.email.trim() || undefined,
@@ -221,7 +160,7 @@ export function CustomersGrid({ customers, products, loading, onEdit, onAddCusto
       longitude: newCustomer.longitude,
     });
 
-    if (success) {
+    if (id) {
       cancelNewCustomer();
     }
     setSaving(false);
@@ -279,9 +218,6 @@ export function CustomersGrid({ customers, products, loading, onEdit, onAddCusto
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Country
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Location
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Orders
@@ -396,51 +332,6 @@ export function CustomersGrid({ customers, products, loading, onEdit, onAddCusto
                       />
                     ) : (
                       <div className="text-sm text-left text-gray-900">{customer.country || '-'}</div>
-                    )}
-                  </td>
-
-                  {/* Location */}
-                  <td className="px-4 py-3">
-                    {isEditing ? (
-                      <div>
-                        <div className="flex gap-1 mb-1">
-                          <input
-                            type="number"
-                            step="any"
-                            value={editingData.latitude ?? ''}
-                            onChange={(e) => setEditingData(prev => ({ ...prev, latitude: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                            onKeyDown={handleKeyDown}
-                            className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="Lat"
-                            disabled={saving}
-                          />
-                          <input
-                            type="number"
-                            step="any"
-                            value={editingData.longitude ?? ''}
-                            onChange={(e) => setEditingData(prev => ({ ...prev, longitude: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                            onKeyDown={handleKeyDown}
-                            className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="Lng"
-                            disabled={saving}
-                          />
-                        </div>
-                        <input
-                          type="text"
-                          onPaste={(e) => handleLocationPaste(e, true)}
-                          className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          placeholder="📍 Paste Google Maps link"
-                          disabled={saving}
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-xs text-left text-gray-900">
-                        {customer.latitude && customer.longitude ? (
-                          <>{customer.latitude.toFixed(4)}, {customer.longitude.toFixed(4)}</>
-                        ) : (
-                          '-'
-                        )}
-                      </div>
                     )}
                   </td>
 
@@ -590,37 +481,6 @@ export function CustomersGrid({ customers, products, loading, onEdit, onAddCusto
                     disabled={saving}
                   />
                 </td>
-                <td className="px-4 py-3">
-                  <div>
-                    <div className="flex gap-1 mb-1">
-                      <input
-                        type="number"
-                        step="any"
-                        value={newCustomer.latitude ?? ''}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, latitude: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                        className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        placeholder="Lat"
-                        disabled={saving}
-                      />
-                      <input
-                        type="number"
-                        step="any"
-                        value={newCustomer.longitude ?? ''}
-                        onChange={(e) => setNewCustomer(prev => ({ ...prev, longitude: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                        className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        placeholder="Lng"
-                        disabled={saving}
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      onPaste={(e) => handleLocationPaste(e, false)}
-                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                      placeholder="📍 Paste Google Maps link"
-                      disabled={saving}
-                    />
-                  </div>
-                </td>
                 <td className="px-4 py-3 text-center text-gray-400 text-sm">
                   New
                 </td>
@@ -650,7 +510,7 @@ export function CustomersGrid({ customers, products, loading, onEdit, onAddCusto
             {/* Empty state */}
             {customers.length === 0 && !showNewRow && (
               <tr>
-                <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                   No customers found. Click "Add New Row" to create your first customer.
                 </td>
               </tr>

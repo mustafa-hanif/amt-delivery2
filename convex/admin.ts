@@ -24,6 +24,8 @@ export const createCustomer = mutation({
     address: v.string(),
     city: v.optional(v.string()),
     country: v.optional(v.string()),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
     email: v.optional(v.string()),
   },
   handler: async (ctx: MutationCtx, args) => {
@@ -45,6 +47,8 @@ export const updateCustomer = mutation({
     address: v.string(),
     city: v.optional(v.string()),
     country: v.optional(v.string()),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
     email: v.optional(v.string()),
   },
   handler: async (ctx: MutationCtx, args) => {
@@ -245,10 +249,25 @@ export const updateOrder = mutation({
     priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("urgent")),
     notes: v.optional(v.string()),
     productId: v.optional(v.id("products")),
+    driverId: v.optional(v.id("drivers")),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
   },
   handler: async (ctx: MutationCtx, args) => {
-    const { id, productId, ...updateData } = args;
+    const { id, productId, driverId, status, priority, notes, latitude, longitude } = args;
     const now = new Date().toISOString();
+    
+    const updateData: any = {
+      status,
+      priority,
+      notes,
+      driverId,
+      updatedAt: now,
+    };
+    
+    // Only include latitude/longitude if they are provided
+    if (latitude !== undefined) updateData.latitude = latitude;
+    if (longitude !== undefined) updateData.longitude = longitude;
     
     // If productId is being updated, fetch the new product details
     if (productId) {
@@ -257,18 +276,11 @@ export const updateOrder = mutation({
         throw new Error("Product not found");
       }
       
-      await ctx.db.patch(id, {
-        ...updateData,
-        productId,
-        orderValue: (product as any).price,
-        updatedAt: now,
-      });
-    } else {
-      await ctx.db.patch(id, {
-        ...updateData,
-        updatedAt: now,
-      });
+      updateData.productId = productId;
+      updateData.orderValue = (product as any).price;
     }
+    
+    await ctx.db.patch(id, updateData);
     
     return true;
   },
@@ -285,6 +297,8 @@ export const createOrder = mutation({
       v.literal("urgent")
     ),
     notes: v.optional(v.string()),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
   },
   handler: async (ctx: MutationCtx, args) => {
     const [customer, product] = await Promise.all([
@@ -307,8 +321,8 @@ export const createOrder = mutation({
       customerAddress: customer.address,
       customerCity: customer.city,
       customerCountry: customer.country,
-      latitude: customer.latitude || 0,
-      longitude: customer.longitude || 0,
+      latitude: args.latitude ?? customer.latitude ?? 0,
+      longitude: args.longitude ?? customer.longitude ?? 0,
       status: "Pending" as const,
       priority: args.priority,
       notes: args.notes,

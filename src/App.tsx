@@ -127,7 +127,7 @@ export function App() {
     <div className="app">
       {/* Navigation Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center gap-4">
               <h1 className="text-xl font-bold text-gray-900">Delivery Management</h1>
@@ -173,7 +173,7 @@ export function App() {
       </div>
 
       {/* Main Content */}
-      <div className={currentView === 'admin' ? '' : 'mx-auto'}>
+      <div>
         {currentView === 'delivery' && <DeliveryList driverId={authState.driverId} />}
         {currentView === 'admin' && <AdminDashboard />}
       </div>

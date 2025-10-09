@@ -45,14 +45,14 @@ export class AdminService {
     }
   }
 
-  async createCustomer(customerData: Omit<Customer, '_id' | 'createdAt' | 'updatedAt' | 'totalOrders'>): Promise<boolean> {
+  async createCustomer(customerData: Omit<Customer, '_id' | 'createdAt' | 'updatedAt' | 'totalOrders'>): Promise<string | null> {
     try {
       const client = this.getClient();
-      await client.mutation(api.admin.createCustomer, customerData);
-      return true;
+      const id = await client.mutation(api.admin.createCustomer, customerData);
+      return id as string;
     } catch (error) {
       console.error("Error creating customer:", error);
-      return false;
+      return null;
     }
   }
 
@@ -108,14 +108,14 @@ export class AdminService {
     }
   }
 
-  async createProduct(productData: Omit<Product, '_id' | 'createdAt' | 'updatedAt'>): Promise<boolean> {
+  async createProduct(productData: Omit<Product, '_id' | 'createdAt' | 'updatedAt'>): Promise<string | null> {
     try {
       const client = this.getClient();
-      await client.mutation(api.admin.createProduct, productData);
-      return true;
+      const id = await client.mutation(api.admin.createProduct, productData);
+      return id as string;
     } catch (error) {
       console.error("Error creating product:", error);
-      return false;
+      return null;
     }
   }
 
@@ -169,6 +169,9 @@ export class AdminService {
     priority: 'low' | 'medium' | 'high' | 'urgent';
     notes?: string;
     productId?: string;
+    driverId?: string;
+    latitude?: number;
+    longitude?: number;
   }): Promise<boolean> {
     try {
       const client = this.getClient();
@@ -178,6 +181,9 @@ export class AdminService {
         priority: orderData.priority,
         notes: orderData.notes,
         productId: orderData.productId as any,
+        driverId: orderData.driverId as any,
+        latitude: orderData.latitude,
+        longitude: orderData.longitude,
       });
       return true;
     } catch (error) {
@@ -191,6 +197,8 @@ export class AdminService {
     productId: string;
     priority: 'low' | 'medium' | 'high' | 'urgent';
     notes?: string;
+    latitude?: number;
+    longitude?: number;
   }): Promise<boolean> {
     try {
       const client = this.getClient();
@@ -199,6 +207,8 @@ export class AdminService {
         productId: orderData.productId as any,
         priority: orderData.priority,
         notes: orderData.notes,
+        latitude: orderData.latitude,
+        longitude: orderData.longitude,
       });
       return true;
     } catch (error) {

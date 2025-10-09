@@ -1,28 +1,62 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Edit2, Truck, Plus, X, Check, Loader2 } from "lucide-react";
-import type { Delivery, Customer, Product } from "../../types";
+import type { Delivery, Customer, Product, Driver } from "../../types";
+
+// Function to extract lat/lng from Google Maps URL
+const extractLocationFromUrl = (url: string): { latitude?: number; longitude?: number } => {
+  try {
+    const patterns = [
+      /@(-?\d+\.\d+),(-?\d+\.\d+)/,  // @lat,lng
+      /q=(-?\d+\.\d+),(-?\d+\.\d+)/,  // q=lat,lng
+      /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/, // !3dlat!4dlng
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1] && match[2]) {
+        const lat = parseFloat(match[1]);
+        const lng = parseFloat(match[2]);
+        if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          return { latitude: lat, longitude: lng };
+        }
+      }
+    }
+
+    return {};
+  } catch (error) {
+    console.error('Error parsing location URL:', error);
+    return {};
+  }
+};
 
 interface OrdersGridProps {
   orders: Delivery[];
   customers: Customer[];
   products: Product[];
+  drivers?: Driver[];
   loading?: boolean;
   onUpdateOrder?: (orderId: string, orderData: { 
     status: 'Pending' | 'On Way' | 'Delivered'; 
     priority: 'low' | 'medium' | 'high' | 'urgent'; 
     notes?: string;
     productId?: string;
+    driverId?: string;
+    latitude?: number;
+    longitude?: number;
   }) => Promise<boolean>;
   onCreateOrder?: (orderData: {
     customerId: string;
     productId: string;
     priority: 'low' | 'medium' | 'high' | 'urgent';
     notes?: string;
+    latitude?: number;
+    longitude?: number;
   }) => Promise<boolean>;
   onAssignDriver?: (order: Delivery) => void;
 }
 
-export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder, onCreateOrder, onAssignDriver }: OrdersGridProps) {
+export function OrdersGrid({ orders, customers, products, drivers, loading, onUpdateOrder, onCreateOrder, onAssignDriver }: OrdersGridProps) {
+  const [localOrders, setLocalOrders] = useState<Delivery[]>(orders);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<Partial<Delivery>>({});
   const [showNewRow, setShowNewRow] = useState(false);
@@ -31,8 +65,15 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
     productId: '',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     notes: '',
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
   });
   const [saving, setSaving] = useState(false);
+
+  // Update local orders when props change
+  useEffect(() => {
+    setLocalOrders(orders);
+  }, [orders]);
 
   const startEdit = (order: Delivery) => {
     setEditingId(order._id);
@@ -44,20 +85,62 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
     setEditingData({});
   };
 
+  const handleLocationPaste = (e: React.ClipboardEvent, isEditing: boolean) => {
+    const pastedText = e.clipboardData.getData('text');
+    
+    // Check if it looks like a Google Maps URL
+    if (pastedText.includes('google.com/maps') || pastedText.includes('goo.gl/maps') || pastedText.includes('maps.app.goo.gl')) {
+      e.preventDefault();
+      const location = extractLocationFromUrl(pastedText);
+      
+      if (location.latitude && location.longitude) {
+        if (isEditing) {
+          setEditingData(prev => ({
+            ...prev,
+            latitude: location.latitude,
+            longitude: location.longitude,
+          }));
+        } else {
+          setNewOrder(prev => ({
+            ...prev,
+            latitude: location.latitude,
+            longitude: location.longitude,
+          }));
+        }
+      }
+    }
+  };
+
   const saveEdit = async () => {
     if (!editingId || !onUpdateOrder) return;
     
     setSaving(true);
+    
+    // Optimistically update the local state
+    setLocalOrders(prevOrders => 
+      prevOrders.map(order => 
+        order._id === editingId 
+          ? { ...order, ...editingData } 
+          : order
+      )
+    );
+    
     const success = await onUpdateOrder(editingId, {
       status: editingData.status!,
       priority: editingData.priority!,
       notes: editingData.notes,
       productId: editingData.productId,
+      driverId: editingData.driverId,
+      latitude: editingData.latitude,
+      longitude: editingData.longitude,
     });
 
     if (success) {
       setEditingId(null);
       setEditingData({});
+    } else {
+      // Revert on failure
+      setLocalOrders(orders);
     }
     setSaving(false);
   };
@@ -69,6 +152,8 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
       productId: '',
       priority: 'medium',
       notes: '',
+      latitude: undefined,
+      longitude: undefined,
     });
   };
 
@@ -79,6 +164,8 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
       productId: '',
       priority: 'medium',
       notes: '',
+      latitude: undefined,
+      longitude: undefined,
     });
   };
 
@@ -97,6 +184,8 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
       productId: newOrder.productId,
       priority: newOrder.priority,
       notes: newOrder.notes || undefined,
+      latitude: newOrder.latitude,
+      longitude: newOrder.longitude,
     });
 
     if (success) {
@@ -137,7 +226,7 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
   }
 
   // Sort orders by creation time (latest first)
-  const sortedOrders = [...orders].sort((a, b) => {
+  const sortedOrders = [...localOrders].sort((a, b) => {
     const dateA = new Date(a.createdAt).getTime();
     const dateB = new Date(b.createdAt).getTime();
     return dateB - dateA; // Descending order (newest first)
@@ -180,14 +269,17 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
                 Notes
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Location
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {orders.length === 0 && !showNewRow ? (
+            {localOrders.length === 0 && !showNewRow ? (
               <tr>
-                <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
                   No orders found. Use the 🛒 button in the Customers tab to create orders.
                 </td>
               </tr>
@@ -204,13 +296,59 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
                     <div className="text-sm text-gray-500">{order.customerPhone}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {order.driver ? (
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{String(order.driver.name || '')}</div>
-                        <div className="text-sm text-gray-500">{String(order.driver.phone || '')}</div>
-                      </div>
+                    {editingId === order._id ? (
+                      <select
+                        value={editingData.driverId || order.driverId || ''}
+                        onChange={(e) => setEditingData({ ...editingData, driverId: e.target.value || undefined })}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">No Driver</option>
+                        {drivers?.map(driver => (
+                          <option key={driver._id} value={driver._id}>
+                            {driver.name} ({driver.vehicleType})
+                          </option>
+                        ))}
+                      </select>
                     ) : (
-                      <span className="text-sm text-gray-400">Not assigned</span>
+                      <select
+                        value={order.driverId || ''}
+                        onChange={async (e) => {
+                          const driverId = e.target.value || undefined;
+                          if (onUpdateOrder) {
+                            // Optimistically update
+                            setLocalOrders(prevOrders => 
+                              prevOrders.map(o => 
+                                o._id === order._id 
+                                  ? { ...o, driverId } 
+                                  : o
+                              )
+                            );
+                            
+                            const success = await onUpdateOrder(order._id, {
+                              status: order.status,
+                              priority: order.priority,
+                              notes: order.notes,
+                              productId: order.productId,
+                              driverId,
+                              latitude: order.latitude,
+                              longitude: order.longitude,
+                            });
+                            
+                            if (!success) {
+                              // Revert on failure
+                              setLocalOrders(orders);
+                            }
+                          }
+                        }}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500 bg-white hover:bg-gray-50"
+                      >
+                        <option value="">No Driver</option>
+                        {drivers?.map(driver => (
+                          <option key={driver._id} value={driver._id}>
+                            {driver.name} ({driver.vehicleType})
+                          </option>
+                        ))}
+                      </select>
                     )}
                   </td>
                   <td className="px-6 py-4">
@@ -286,6 +424,48 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
                       order.notes || '-'
                     )}
                   </td>
+                  {/* Location */}
+                  <td className="px-6 py-4">
+                    {editingId === order._id ? (
+                      <div>
+                        <div className="flex gap-1 mb-1">
+                          <input
+                            type="number"
+                            step="any"
+                            value={editingData.latitude ?? order.latitude ?? ''}
+                            onChange={(e) => setEditingData({ ...editingData, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                            className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="Lat"
+                            disabled={saving}
+                          />
+                          <input
+                            type="number"
+                            step="any"
+                            value={editingData.longitude ?? order.longitude ?? ''}
+                            onChange={(e) => setEditingData({ ...editingData, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                            className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="Lng"
+                            disabled={saving}
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          onPaste={(e) => handleLocationPaste(e, true)}
+                          className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          placeholder="📍 Paste Google Maps link"
+                          disabled={saving}
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-900">
+                        {order.latitude && order.longitude ? (
+                          <>{order.latitude.toFixed(4)}, {order.longitude.toFixed(4)}</>
+                        ) : (
+                          '-'
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {editingId === order._id ? (
                       <div className="flex space-x-2">
@@ -313,15 +493,6 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
                         >
                           <Edit2 size={16} />
                         </button>
-                        {onAssignDriver && (
-                          <button
-                            onClick={() => onAssignDriver(order)}
-                            className="text-green-600 hover:text-green-900 flex items-center gap-1"
-                            title="Assign Driver"
-                          >
-                            <Truck size={16} />
-                          </button>
-                        )}
                       </div>
                     )}
                   </td>
@@ -393,6 +564,38 @@ export function OrdersGrid({ orders, customers, products, loading, onUpdateOrder
                     placeholder="Order notes (optional)"
                     disabled={saving}
                   />
+                </td>
+                {/* Location */}
+                <td className="px-6 py-4">
+                  <div>
+                    <div className="flex gap-1 mb-1">
+                      <input
+                        type="number"
+                        step="any"
+                        value={newOrder.latitude ?? ''}
+                        onChange={(e) => setNewOrder(prev => ({ ...prev, latitude: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                        className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                        placeholder="Lat"
+                        disabled={saving}
+                      />
+                      <input
+                        type="number"
+                        step="any"
+                        value={newOrder.longitude ?? ''}
+                        onChange={(e) => setNewOrder(prev => ({ ...prev, longitude: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                        className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                        placeholder="Lng"
+                        disabled={saving}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      onPaste={(e) => handleLocationPaste(e, false)}
+                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                      placeholder="📍 Paste Google Maps link"
+                      disabled={saving}
+                    />
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2">

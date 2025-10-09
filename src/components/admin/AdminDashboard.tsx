@@ -125,7 +125,7 @@ export function AdminDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
@@ -172,7 +172,7 @@ export function AdminDashboard() {
 
       {/* Navigation Tabs */}
       <div className="bg-white border-b">
-        <div className="mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="px-4 sm:px-6 lg:px-8">
           <nav className="flex space-x-8 overflow-x-auto">
             {tabs.map((tab) => {
               const TabIcon = tab.Icon;
@@ -197,7 +197,7 @@ export function AdminDashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="mx-auto px-4 sm:px-6 lg:px-8 py-8 w-7xl">
+      <div className="px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'overview' && (
           <div className="space-y-8">
             {/* Stats Grid */}
@@ -356,12 +356,11 @@ export function AdminDashboard() {
             orders={orders}
             customers={customers}
             products={products}
+            drivers={drivers}
             loading={loading}
             onUpdateOrder={async (orderId, orderData) => {
               const success = await adminService.updateOrder(orderId, orderData);
-              if (success) {
-                await loadData(); // Refresh data
-              }
+              // OrdersGrid handles optimistic updates now
               return success;
             }}
             onCreateOrder={async (orderData) => {
@@ -371,7 +370,6 @@ export function AdminDashboard() {
               }
               return success;
             }}
-            onAssignDriver={handleAssignDriver}
           />
         )}
       </div>
