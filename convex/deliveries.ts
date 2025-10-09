@@ -5,15 +5,23 @@ import type { QueryCtx, MutationCtx } from "./_generated/server";
 const statusEnum = v.union(
   v.literal("Pending"),
   v.literal("On Way"),
-  v.literal("Delivered")
+  v.literal("Delivered"),
+  v.literal("No Answer"),
+  v.literal("Cancelled")
 );
 
 export const list = query({
   args: {
     status: v.optional(statusEnum),
   },
-  handler: async (ctx: QueryCtx, args: { status?: "Pending" | "On Way" | "Delivered" }) => {
+  handler: async (ctx: QueryCtx, args: { status?: "Pending" | "On Way" | "Delivered" | "No Answer" | "Cancelled" }) => {
     const deliveries = await ctx.db.query("deliveries").collect();
+    
+    // Debug: Log coordinates
+    console.log('🗄️ Database deliveries:');
+    deliveries.forEach((d: any) => {
+      console.log(`  - ${d.customerName}: lat=${d.latitude}, lng=${d.longitude}`);
+    });
     
     // Populate related records (driver, product, customer)
     const populatedDeliveries = await Promise.all(
@@ -59,7 +67,7 @@ export const updateStatus = mutation({
     _id: v.string(),
     status: statusEnum,
   },
-  handler: async (ctx: MutationCtx, args: { _id: string; status: "Pending" | "On Way" | "Delivered" }) => {
+  handler: async (ctx: MutationCtx, args: { _id: string; status: "Pending" | "On Way" | "Delivered" | "No Answer" | "Cancelled" }) => {
     const { _id, status } = args;
 
     // Convert string ID to proper Convex ID
@@ -75,6 +83,34 @@ export const updateStatus = mutation({
     
     await ctx.db.patch(normalizedId, {
       status,
+      updatedAt: new Date().toISOString(),
+    });
+    
+    return true;
+  },
+});
+
+export const updateDeliveryTime = mutation({
+  args: {
+    _id: v.string(),
+    deliveryTime: v.union(v.literal("today"), v.literal("tomorrow"), v.literal("2-days")),
+  },
+  handler: async (ctx: MutationCtx, args: { _id: string; deliveryTime: "today" | "tomorrow" | "2-days" }) => {
+    const { _id, deliveryTime } = args;
+
+    // Convert string ID to proper Convex ID
+    const normalizedId = ctx.db.normalizeId("deliveries", _id);
+    if (!normalizedId) {
+      throw new Error(`Invalid delivery id: ${_id}`);
+    }
+
+    const record = await ctx.db.get(normalizedId);
+    if (!record) {
+      throw new Error(`Delivery ${_id} not found`);
+    }
+    
+    await ctx.db.patch(normalizedId, {
+      deliveryTime,
       updatedAt: new Date().toISOString(),
     });
     

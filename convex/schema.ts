@@ -11,7 +11,9 @@ const linkedRecordSchema = v.object({
 const statusEnum = v.union(
   v.literal("Pending"),
   v.literal("On Way"),
-  v.literal("Delivered")
+  v.literal("Delivered"),
+  v.literal("No Answer"),
+  v.literal("Cancelled")
 );
 
 const priorityEnum = v.union(

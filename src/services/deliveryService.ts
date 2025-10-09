@@ -56,6 +56,20 @@ export class DeliveryService {
     }
   }
 
+  async updateDeliveryTime(deliveryId: string, deliveryTime: 'today' | 'tomorrow' | '2-days'): Promise<boolean> {
+    try {
+      const client = this.getClient();
+      await client.mutation(api.deliveries.updateDeliveryTime, {
+        _id: deliveryId,
+        deliveryTime,
+      });
+      return true;
+    } catch (error) {
+      console.error("Error updating delivery time:", error);
+      return false;
+    }
+  }
+
   private mapFromConvex(record: ConvexDeliveryRecord): Delivery {
     const convexId = record._id ? String(record._id) : "";
     const createdAt = record.createdAt
@@ -154,8 +168,16 @@ export class DeliveryService {
         return "Delivered";
       }
 
+      if (["no_answer", "noanswer"].includes(normalized)) {
+        return "No Answer";
+      }
+
+      if (["cancelled", "canceled"].includes(normalized)) {
+        return "Cancelled";
+      }
+
       // Handle exact matches for the new format
-      if (value === "Pending" || value === "On Way" || value === "Delivered") {
+      if (value === "Pending" || value === "On Way" || value === "Delivered" || value === "No Answer" || value === "Cancelled") {
         return value as Delivery['status'];
       }
     }
@@ -166,14 +188,20 @@ export class DeliveryService {
 
   // Sort deliveries by distance from driver location
   sortDeliveriesByDistance(deliveries: Delivery[], driverLocation: DriverLocation): DeliveryWithDistance[] {
+    console.log('📍 Driver Location:', driverLocation.latitude, driverLocation.longitude);
+    
     return deliveries
       .map(delivery => {
+        console.log(`📦 Order ${delivery.customerName}: Destination (${delivery.latitude}, ${delivery.longitude})`);
+        
         const distance = this.calculateDistance(
           driverLocation.latitude,
           driverLocation.longitude,
           delivery.latitude,
           delivery.longitude
         );
+        
+        console.log(`   → Distance: ${distance.toFixed(2)} km`);
 
         return {
           ...delivery,

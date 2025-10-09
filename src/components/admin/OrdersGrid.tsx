@@ -36,7 +36,7 @@ interface OrdersGridProps {
   drivers?: Driver[];
   loading?: boolean;
   onUpdateOrder?: (orderId: string, orderData: { 
-    status: 'Pending' | 'On Way' | 'Delivered'; 
+    status: 'Pending' | 'On Way' | 'Delivered' | 'No Answer' | 'Cancelled'; 
     priority: 'low' | 'medium' | 'high' | 'urgent';
     deliveryTime?: 'today' | 'tomorrow' | '2-days';
     notes?: string;
@@ -324,6 +324,8 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       case 'Pending': return 'bg-yellow-100 text-yellow-800';
       case 'On Way': return 'bg-blue-100 text-blue-800';
       case 'Delivered': return 'bg-green-100 text-green-800';
+      case 'No Answer': return 'bg-purple-100 text-purple-800';
+      case 'Cancelled': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -496,11 +498,16 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 </td>
               </tr>
             ) : (
-              sortedOrders.map((order) => (
-                <tr key={order._id} className={editingId === order._id ? "bg-blue-50" : "hover:bg-gray-50"}>
+              sortedOrders.map((order) => {
+                const hasInvalidLocation = !order.latitude || !order.longitude || (order.latitude === 0 && order.longitude === 0);
+                return (
+                <tr key={order._id} className={`${editingId === order._id ? "bg-blue-50" : "hover:bg-gray-50"} ${hasInvalidLocation ? "border-l-4 border-l-orange-500" : ""}`}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
                       {order.externalId || `#${order._id.slice(-6)}`}
+                      {hasInvalidLocation && (
+                        <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">⚠️ No Location</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -598,6 +605,8 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                         <option value="Pending">Pending</option>
                         <option value="On Way">On Way</option>
                         <option value="Delivered">Delivered</option>
+                        <option value="No Answer">No Answer</option>
+                        <option value="Cancelled">Cancelled</option>
                       </select>
                     ) : (
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
@@ -727,7 +736,8 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                     )}
                   </td>
                 </tr>
-              ))
+              );
+              })
             )}
 
             {/* New order row */}

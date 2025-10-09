@@ -1,17 +1,24 @@
 import { Phone, MessageCircle, MapPin, Navigation, Globe, Clock } from 'lucide-react';
 import type { DeliveryWithDistance, Delivery } from "../types";
+import { deliveryService } from '../services/deliveryService';
+import { useState } from 'react';
 
 interface DeliveryCardProps {
   delivery: DeliveryWithDistance;
   onStatusUpdate?: (deliveryId: string, status: Delivery['status']) => void;
+  onDeliveryTimeUpdate?: (deliveryId: string, deliveryTime: 'today' | 'tomorrow' | '2-days') => void;
 }
 
-export function DeliveryCard({ delivery, onStatusUpdate }: DeliveryCardProps) {
+export function DeliveryCard({ delivery, onStatusUpdate, onDeliveryTimeUpdate }: DeliveryCardProps) {
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending': return 'bg-yellow-500';
       case 'On Way': return 'bg-blue-500';
       case 'Delivered': return 'bg-green-500';
+      case 'No Answer': return 'bg-purple-500';
+      case 'Cancelled': return 'bg-red-500';
       default: return 'bg-gray-500';
     }
   };
@@ -75,6 +82,21 @@ export function DeliveryCard({ delivery, onStatusUpdate }: DeliveryCardProps) {
     }
   };
 
+  const handleDeliveryTimeChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newTime = e.target.value as 'today' | 'tomorrow' | '2-days';
+    if (!newTime) return;
+    
+    setIsUpdating(true);
+    const success = await deliveryService.updateDeliveryTime(delivery._id, newTime);
+    setIsUpdating(false);
+    
+    if (success && onDeliveryTimeUpdate) {
+      onDeliveryTimeUpdate(delivery._id, newTime);
+    } else if (!success) {
+      alert("Failed to update delivery time. Please try again.");
+    }
+  };
+
   return (
     <div className={`delivery-card border-2 rounded-lg p-4 mb-4 ${getPriorityColor(delivery.priority)}`}>
       <div className="flex justify-between items-start mb-3">
@@ -122,6 +144,22 @@ export function DeliveryCard({ delivery, onStatusUpdate }: DeliveryCardProps) {
         <p className="text-sm text-gray-700 mb-3 italic">"{delivery.notes}"</p>
       )}
 
+      {/* Delivery Time Selector */}
+      <div className="mb-3">
+        <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Time</label>
+        <select
+          value={delivery.deliveryTime || ''}
+          onChange={handleDeliveryTimeChange}
+          disabled={isUpdating}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+        >
+          <option value="">Not Set</option>
+          <option value="today">Today</option>
+          <option value="tomorrow">Tomorrow</option>
+          <option value="2-days">2 Days After</option>
+        </select>
+      </div>
+
       {delivery.orderValue && (
         <p className="text-sm font-medium text-gray-800 mb-3 flex items-center gap-1">
           Order Value: AED {delivery.orderValue.toFixed(2)}
@@ -150,24 +188,64 @@ export function DeliveryCard({ delivery, onStatusUpdate }: DeliveryCardProps) {
         <Navigation size={18} /> Get Directions
       </button>
 
-      {delivery.status !== 'Delivered' && (
-        <div className="flex gap-2">
-          {delivery.status === 'Pending' && (
-            <button
-              onClick={() => handleStatusChange('On Way')}
-              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-medium transition-colors"
-            >
-              Start Delivery
-            </button>
-          )}
-          {delivery.status === 'On Way' && (
-            <button
-              onClick={() => handleStatusChange('Delivered')}
-              className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg font-medium transition-colors"
-            >
-              Mark Delivered
-            </button>
-          )}
+      {/* Status Change Buttons */}
+      {delivery.status !== 'Delivered' && delivery.status !== 'Cancelled' && (
+        <div className="space-y-2">
+          {/* Primary action buttons */}
+          <div className="flex gap-2">
+            {delivery.status === 'Pending' && (
+              <button
+                onClick={() => handleStatusChange('On Way')}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+              >
+                Start Delivery
+              </button>
+            )}
+            {delivery.status === 'On Way' && (
+              <button
+                onClick={() => handleStatusChange('Delivered')}
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+              >
+                Mark Delivered
+              </button>
+            )}
+            {delivery.status === 'No Answer' && (
+              <>
+                <button
+                  onClick={() => handleStatusChange('On Way')}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-medium transition-colors text-sm"
+                >
+                  Try Again
+                </button>
+                <button
+                  onClick={() => handleStatusChange('Delivered')}
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg font-medium transition-colors text-sm"
+                >
+                  Delivered
+                </button>
+              </>
+            )}
+          </div>
+          
+          {/* Secondary action buttons */}
+          <div className="flex gap-2">
+            {(delivery.status === 'Pending' || delivery.status === 'On Way') && (
+              <>
+                <button
+                  onClick={() => handleStatusChange('No Answer')}
+                  className="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-2 px-3 rounded-lg font-medium transition-colors text-sm"
+                >
+                  No Answer
+                </button>
+                <button
+                  onClick={() => handleStatusChange('Cancelled')}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 px-3 rounded-lg font-medium transition-colors text-sm"
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

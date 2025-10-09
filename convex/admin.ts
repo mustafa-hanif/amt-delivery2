@@ -245,7 +245,7 @@ export const updateDriver = mutation({
 export const updateOrder = mutation({
   args: {
     id: v.id("deliveries"),
-    status: v.union(v.literal("Pending"), v.literal("On Way"), v.literal("Delivered")),
+    status: v.union(v.literal("Pending"), v.literal("On Way"), v.literal("Delivered"), v.literal("No Answer"), v.literal("Cancelled")),
     priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("urgent")),
     deliveryTime: v.optional(v.union(v.literal("today"), v.literal("tomorrow"), v.literal("2-days"))),
     notes: v.optional(v.string()),

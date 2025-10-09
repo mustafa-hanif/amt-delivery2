@@ -17,7 +17,7 @@ export interface Delivery {
   customerAddress: string;
   latitude: number;
   longitude: number;
-  status: 'Pending' | 'On Way' | 'Delivered'; // Updated status values
+  status: 'Pending' | 'On Way' | 'Delivered' | 'No Answer' | 'Cancelled'; // Updated status values
   priority: 'low' | 'medium' | 'high' | 'urgent';
   deliveryTime?: 'today' | 'tomorrow' | '2-days';
   estimatedDeliveryTime?: string;

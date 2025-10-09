@@ -17,9 +17,15 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
   const [filter, setFilter] = useState<'all' | Delivery['status']>('all');
 
   useEffect(() => {
-    loadDeliveries();
     requestLocationPermission();
   }, []);
+
+  // Reload deliveries whenever driver location changes
+  useEffect(() => {
+    if (driverLocation !== null || locationPermission === false) {
+      loadDeliveries();
+    }
+  }, [driverLocation, filter]);
 
   const requestLocationPermission = async () => {
     try {
@@ -41,31 +47,44 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
       setLoading(true);
       setError(null);
 
+      console.log('🔄 Loading deliveries... driverLocation:', driverLocation);
+
   // Get deliveries from Convex
   const statusFilter = filter === 'all' ? undefined : filter;
       const deliveriesData = await deliveryService.getDeliveries(statusFilter);
+      console.log('📥 Received deliveries from backend:', deliveriesData.length, 'orders');
 
       if (driverLocation) {
+        console.log('✅ Driver location available, calculating distances...');
         // Sort by distance if we have driver location
+        console.log('🚗 Sorting deliveries by distance from driver location...');
         const sortedDeliveries = deliveryService.sortDeliveriesByDistance(deliveriesData, driverLocation);
+        console.log('✅ After sorting, first delivery:', sortedDeliveries[0]?.customerName, 'distanceText:', sortedDeliveries[0]?.distanceText);
         
-        // Mark deliveries with invalid coordinates (0, 0) as location unknown
+        // The sortDeliveriesByDistance already handles distance calculation
+        // Just validate and mark invalid coordinates
         const deliveriesWithValidation = sortedDeliveries.map(delivery => {
           // Debug log
-          console.log('Delivery:', delivery.customerName, 'Coords:', delivery.latitude, delivery.longitude, 'Distance:', delivery.distanceText);
+          console.log('🔍 Validating:', delivery.customerName, 'Coords:', delivery.latitude, delivery.longitude, 'Current distanceText:', delivery.distanceText);
           
+          // Only override if coordinates are truly invalid (0,0 or missing)
           if (!delivery.latitude || !delivery.longitude || (delivery.latitude === 0 && delivery.longitude === 0)) {
+            console.log('  ❌ Invalid coords, setting to Location unknown');
             return {
               ...delivery,
               distance: 0,
               distanceText: 'Location unknown'
             };
           }
+          // Return as-is with calculated distance from sortDeliveriesByDistance
+          console.log('  ✅ Valid coords, keeping distanceText:', delivery.distanceText);
           return delivery;
         });
         
+        console.log('📋 Final deliveries:', deliveriesWithValidation.map(d => `${d.customerName}: ${d.distanceText}`));
         setDeliveries(deliveriesWithValidation);
       } else {
+        console.log('❌ No driver location available, marking all as location unknown');
         // Convert to DeliveryWithDistance format without distance sorting
         const deliveriesWithDistance = deliveriesData.map(delivery => ({
           ...delivery,
@@ -98,6 +117,17 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
     }
   };
 
+  const handleDeliveryTimeUpdate = (deliveryId: string, deliveryTime: 'today' | 'tomorrow' | '2-days') => {
+    // Update local state
+    setDeliveries(prev =>
+      prev.map(delivery =>
+        delivery._id === deliveryId
+          ? { ...delivery, deliveryTime }
+          : delivery
+      )
+    );
+  };
+
   const refreshLocation = async () => {
     const location = await deliveryService.getCurrentLocation();
     if (location) {
@@ -119,6 +149,8 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
     Pending: 'Pending',
     'On Way': 'On Way',
     Delivered: 'Delivered',
+    'No Answer': 'No Answer',
+    Cancelled: 'Cancelled',
   };
 
   if (loading) {
@@ -188,7 +220,9 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
             { key: 'all' as const, label: statusLabels.all, count: deliveries.length },
             { key: 'Pending' as const, label: statusLabels.Pending, count: deliveries.filter(d => d.status === 'Pending').length },
             { key: 'On Way' as const, label: statusLabels['On Way'], count: deliveries.filter(d => d.status === 'On Way').length },
-            { key: 'Delivered' as const, label: statusLabels.Delivered, count: deliveries.filter(d => d.status === 'Delivered').length }
+            { key: 'Delivered' as const, label: statusLabels.Delivered, count: deliveries.filter(d => d.status === 'Delivered').length },
+            { key: 'No Answer' as const, label: statusLabels['No Answer'], count: deliveries.filter(d => d.status === 'No Answer').length },
+            { key: 'Cancelled' as const, label: statusLabels.Cancelled, count: deliveries.filter(d => d.status === 'Cancelled').length }
           ]).map(({ key, label, count }) => (
             <button
               key={key}
@@ -220,6 +254,7 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
               key={delivery._id}
               delivery={delivery}
               onStatusUpdate={handleStatusUpdate}
+              onDeliveryTimeUpdate={handleDeliveryTimeUpdate}
             />
           ))}
         </div>

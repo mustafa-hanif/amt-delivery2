@@ -165,7 +165,7 @@ export class AdminService {
   }
 
   async updateOrder(id: string, orderData: {
-    status: 'Pending' | 'On Way' | 'Delivered';
+    status: 'Pending' | 'On Way' | 'Delivered' | 'No Answer' | 'Cancelled';
     priority: 'low' | 'medium' | 'high' | 'urgent';
     deliveryTime?: 'today' | 'tomorrow' | '2-days';
     notes?: string;
