@@ -21,6 +21,12 @@ const priorityEnum = v.union(
   v.literal("urgent")
 );
 
+const deliveryTimeEnum = v.union(
+  v.literal("today"),
+  v.literal("tomorrow"),
+  v.literal("2-days")
+);
+
 const driverTypeEnum = v.union(
   v.literal("car"),
   v.literal("bike"),
@@ -43,6 +49,7 @@ export default defineSchema({
     longitude: v.number(),
     status: statusEnum,
     priority: priorityEnum,
+    deliveryTime: v.optional(deliveryTimeEnum),
     estimatedDeliveryTime: v.optional(v.string()),
     notes: v.optional(v.string()),
     orderValue: v.optional(v.number()),

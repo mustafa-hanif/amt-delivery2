@@ -247,6 +247,7 @@ export const updateOrder = mutation({
     id: v.id("deliveries"),
     status: v.union(v.literal("Pending"), v.literal("On Way"), v.literal("Delivered")),
     priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("urgent")),
+    deliveryTime: v.optional(v.union(v.literal("today"), v.literal("tomorrow"), v.literal("2-days"))),
     notes: v.optional(v.string()),
     productId: v.optional(v.id("products")),
     driverId: v.optional(v.id("drivers")),
@@ -254,7 +255,7 @@ export const updateOrder = mutation({
     longitude: v.optional(v.number()),
   },
   handler: async (ctx: MutationCtx, args) => {
-    const { id, productId, driverId, status, priority, notes, latitude, longitude } = args;
+    const { id, productId, driverId, status, priority, deliveryTime, notes, latitude, longitude } = args;
     const now = new Date().toISOString();
     
     const updateData: any = {
@@ -264,6 +265,9 @@ export const updateOrder = mutation({
       driverId,
       updatedAt: now,
     };
+    
+    // Only include deliveryTime if provided
+    if (deliveryTime !== undefined) updateData.deliveryTime = deliveryTime;
     
     // Only include latitude/longitude if they are provided
     if (latitude !== undefined) updateData.latitude = latitude;
@@ -296,6 +300,7 @@ export const createOrder = mutation({
       v.literal("high"),
       v.literal("urgent")
     ),
+    deliveryTime: v.optional(v.union(v.literal("today"), v.literal("tomorrow"), v.literal("2-days"))),
     notes: v.optional(v.string()),
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
@@ -325,6 +330,7 @@ export const createOrder = mutation({
       longitude: args.longitude ?? customer.longitude ?? 0,
       status: "Pending" as const,
       priority: args.priority,
+      deliveryTime: args.deliveryTime,
       notes: args.notes,
       orderValue: product.price,
       createdAt: now,

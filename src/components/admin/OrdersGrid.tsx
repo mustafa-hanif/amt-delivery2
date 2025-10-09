@@ -37,7 +37,8 @@ interface OrdersGridProps {
   loading?: boolean;
   onUpdateOrder?: (orderId: string, orderData: { 
     status: 'Pending' | 'On Way' | 'Delivered'; 
-    priority: 'low' | 'medium' | 'high' | 'urgent'; 
+    priority: 'low' | 'medium' | 'high' | 'urgent';
+    deliveryTime?: 'today' | 'tomorrow' | '2-days';
     notes?: string;
     productId?: string;
     driverId?: string;
@@ -48,6 +49,7 @@ interface OrdersGridProps {
     customerId: string;
     productId: string;
     priority: 'low' | 'medium' | 'high' | 'urgent';
+    deliveryTime?: 'today' | 'tomorrow' | '2-days';
     notes?: string;
     latitude?: number;
     longitude?: number;
@@ -65,6 +67,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     customerId: '',
     productId: '',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
+    deliveryTime: '' as '' | 'today' | 'tomorrow' | '2-days',
     notes: '',
     latitude: undefined as number | undefined,
     longitude: undefined as number | undefined,
@@ -95,7 +98,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
   };
 
   const parseMagicBoxData = (data: string) => {
-    const lines = data.trim().split('\n');
+    const lines = data.trim().split('\n').filter(line => line.trim());
     const parsed: Array<{
       customerName: string;
       customerPhone: string;
@@ -105,12 +108,31 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
 
     for (const line of lines) {
       const columns = line.split('\t'); // Excel uses tabs
-      if (columns.length >= 3) {
+      
+      // Handle flexible column formats
+      if (columns.length >= 2) {
+        // Try to identify phone number (starts with digits, longer than 7 chars)
+        const phoneIndex = columns.findIndex(col => {
+          const trimmed = col.trim();
+          return /^\d{7,}$/.test(trimmed);
+        });
+        
+        // Last column is usually the product
+        const productName = columns[columns.length - 1]?.trim() || '';
+        const customerName = columns[0]?.trim() || '';
+        const customerPhone = phoneIndex >= 0 ? columns[phoneIndex]?.trim() || '' : '';
+        
+        // Everything between name and phone/product can be notes (address, etc)
+        const notes = columns.slice(1, phoneIndex >= 0 ? phoneIndex : columns.length - 1)
+          .map(c => c.trim())
+          .filter(c => c)
+          .join(' ');
+
         parsed.push({
-          customerName: columns[0]?.trim() || '',
-          customerPhone: columns[1]?.trim() || '',
-          productName: columns[2]?.trim() || '',
-          notes: columns[3]?.trim() || undefined,
+          customerName,
+          customerPhone,
+          productName,
+          notes: notes || undefined,
         });
       }
     }
@@ -119,6 +141,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
   };
 
   const handleMagicBoxPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault(); // Prevent default paste to avoid duplication
     const pastedData = e.clipboardData.getData('text');
     setMagicBoxData(pastedData);
     const parsed = parseMagicBoxData(pastedData);
@@ -208,6 +231,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     const success = await onUpdateOrder(editingId, {
       status: editingData.status!,
       priority: editingData.priority!,
+      deliveryTime: editingData.deliveryTime,
       notes: editingData.notes,
       productId: editingData.productId,
       driverId: editingData.driverId,
@@ -249,6 +273,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       customerId: '',
       productId: '',
       priority: 'medium',
+      deliveryTime: '',
       notes: '',
       latitude: undefined,
       longitude: undefined,
@@ -261,6 +286,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       customerId: '',
       productId: '',
       priority: 'medium',
+      deliveryTime: '',
       notes: '',
       latitude: undefined,
       longitude: undefined,
@@ -281,6 +307,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       customerId: newOrder.customerId,
       productId: newOrder.productId,
       priority: newOrder.priority,
+      deliveryTime: newOrder.deliveryTime || undefined,
       notes: newOrder.notes || undefined,
       latitude: newOrder.latitude,
       longitude: newOrder.longitude,
@@ -360,7 +387,10 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
             <div className="mb-3">
               <h4 className="font-semibold text-purple-800 mb-1">Bulk Import Orders from Excel</h4>
               <p className="text-sm text-purple-600">
-                Paste Excel data with columns: <strong>Customer Name | Phone | Product | Notes</strong>
+                Paste Excel data. Smart detection finds: <strong>Customer Name (first) | Phone (digits) | Product (last)</strong>
+              </p>
+              <p className="text-xs text-purple-500 mt-1">
+                Example: YOUNUS | Barwa road Doha | QATAR | 97430837436 | YAMANI KHALTA
               </p>
             </div>
             
@@ -443,6 +473,9 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Delivery Time
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Notes
@@ -569,6 +602,33 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                     ) : (
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
                         {order.status}
+                      </span>
+                    )}
+                  </td>
+                  {/* Delivery Time */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {editingId === order._id ? (
+                      <select
+                        value={editingData.deliveryTime || order.deliveryTime || ''}
+                        onChange={(e) => setEditingData({ ...editingData, deliveryTime: e.target.value as any })}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">Select Time</option>
+                        <option value="today">Today</option>
+                        <option value="tomorrow">Tomorrow</option>
+                        <option value="2-days">2 Days After</option>
+                      </select>
+                    ) : (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        order.deliveryTime === 'today' ? 'bg-red-100 text-red-800' :
+                        order.deliveryTime === 'tomorrow' ? 'bg-yellow-100 text-yellow-800' :
+                        order.deliveryTime === '2-days' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {order.deliveryTime === 'today' ? 'Today' :
+                         order.deliveryTime === 'tomorrow' ? 'Tomorrow' :
+                         order.deliveryTime === '2-days' ? '2 Days After' :
+                         'Not Set'}
                       </span>
                     )}
                   </td>
@@ -711,6 +771,20 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 </td>
                 <td className="px-6 py-4 text-center text-gray-400 text-sm">
                   Pending
+                </td>
+                {/* Delivery Time */}
+                <td className="px-6 py-4">
+                  <select
+                    value={newOrder.deliveryTime || ''}
+                    onChange={(e) => setNewOrder(prev => ({ ...prev, deliveryTime: e.target.value as any }))}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                    disabled={saving}
+                  >
+                    <option value="">Select Time</option>
+                    <option value="today">Today</option>
+                    <option value="tomorrow">Tomorrow</option>
+                    <option value="2-days">2 Days After</option>
+                  </select>
                 </td>
                 <td className="px-6 py-4">
                   <textarea

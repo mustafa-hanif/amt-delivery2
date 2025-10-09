@@ -167,6 +167,7 @@ export class AdminService {
   async updateOrder(id: string, orderData: {
     status: 'Pending' | 'On Way' | 'Delivered';
     priority: 'low' | 'medium' | 'high' | 'urgent';
+    deliveryTime?: 'today' | 'tomorrow' | '2-days';
     notes?: string;
     productId?: string;
     driverId?: string;
@@ -179,6 +180,7 @@ export class AdminService {
         id: id as any, 
         status: orderData.status,
         priority: orderData.priority,
+        deliveryTime: orderData.deliveryTime,
         notes: orderData.notes,
         productId: orderData.productId as any,
         driverId: orderData.driverId as any,
@@ -196,6 +198,7 @@ export class AdminService {
     customerId: string;
     productId: string;
     priority: 'low' | 'medium' | 'high' | 'urgent';
+    deliveryTime?: 'today' | 'tomorrow' | '2-days';
     notes?: string;
     latitude?: number;
     longitude?: number;
@@ -206,6 +209,7 @@ export class AdminService {
         customerId: orderData.customerId as any,
         productId: orderData.productId as any,
         priority: orderData.priority,
+        deliveryTime: orderData.deliveryTime,
         notes: orderData.notes,
         latitude: orderData.latitude,
         longitude: orderData.longitude,
