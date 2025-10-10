@@ -56,7 +56,7 @@ export class DeliveryService {
     }
   }
 
-  async updateDeliveryTime(deliveryId: string, deliveryTime: 'today' | 'tomorrow' | '2-days'): Promise<boolean> {
+  async updateDeliveryTime(deliveryId: string, deliveryTime: string): Promise<boolean> {
     try {
       const client = this.getClient();
       await client.mutation(api.deliveries.updateDeliveryTime, {
@@ -93,6 +93,7 @@ export class DeliveryService {
       longitude,
       status: this.normalizeStatus(record.status),
       priority: (record.priority ?? "medium") as Delivery['priority'],
+      deliveryTime: record.deliveryTime ?? undefined,
       estimatedDeliveryTime: record.estimatedDeliveryTime ?? undefined,
       notes: record.notes ?? undefined,
       orderValue,

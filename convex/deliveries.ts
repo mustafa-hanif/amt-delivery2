@@ -93,9 +93,9 @@ export const updateStatus = mutation({
 export const updateDeliveryTime = mutation({
   args: {
     _id: v.string(),
-    deliveryTime: v.union(v.literal("today"), v.literal("tomorrow"), v.literal("2-days")),
+    deliveryTime: v.string(),
   },
-  handler: async (ctx: MutationCtx, args: { _id: string; deliveryTime: "today" | "tomorrow" | "2-days" }) => {
+  handler: async (ctx: MutationCtx, args: { _id: string; deliveryTime: string }) => {
     const { _id, deliveryTime } = args;
 
     // Convert string ID to proper Convex ID

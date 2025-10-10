@@ -377,6 +377,20 @@ export function AdminDashboard() {
               }
               return success;
             }}
+            onCreateCustomer={async (customerData) => {
+              const success = await adminService.createCustomer(customerData);
+              if (success) {
+                await loadData(); // Refresh data
+              }
+              return success;
+            }}
+            onCreateProduct={async (productData) => {
+              const success = await adminService.createProduct(productData);
+              if (success) {
+                await loadData(); // Refresh data
+              }
+              return success;
+            }}
           />
         )}
       </div>

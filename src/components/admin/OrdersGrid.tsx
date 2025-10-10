@@ -38,7 +38,7 @@ interface OrdersGridProps {
   onUpdateOrder?: (orderId: string, orderData: { 
     status: 'Pending' | 'On Way' | 'Delivered' | 'No Answer' | 'Cancelled'; 
     priority: 'low' | 'medium' | 'high' | 'urgent';
-    deliveryTime?: 'today' | 'tomorrow' | '2-days';
+    deliveryTime?: string;
     notes?: string;
     productId?: string;
     driverId?: string;
@@ -49,16 +49,18 @@ interface OrdersGridProps {
     customerId: string;
     productId: string;
     priority: 'low' | 'medium' | 'high' | 'urgent';
-    deliveryTime?: 'today' | 'tomorrow' | '2-days';
+    deliveryTime?: string;
     notes?: string;
     latitude?: number;
     longitude?: number;
   }) => Promise<boolean>;
   onDeleteOrder?: (orderId: string) => Promise<boolean>;
   onAssignDriver?: (order: Delivery) => void;
+  onCreateCustomer?: (customerData: Omit<Customer, '_id' | 'createdAt' | 'updatedAt' | 'totalOrders'>) => Promise<string | null>;
+  onCreateProduct?: (productData: Omit<Product, '_id' | 'createdAt' | 'updatedAt'>) => Promise<string | null>;
 }
 
-export function OrdersGrid({ orders, customers, products, drivers, loading, onUpdateOrder, onCreateOrder, onDeleteOrder, onAssignDriver }: OrdersGridProps) {
+export function OrdersGrid({ orders, customers, products, drivers, loading, onUpdateOrder, onCreateOrder, onDeleteOrder, onAssignDriver, onCreateCustomer, onCreateProduct }: OrdersGridProps) {
   const [localOrders, setLocalOrders] = useState<Delivery[]>(orders);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<Partial<Delivery>>({});
@@ -67,7 +69,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     customerId: '',
     productId: '',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
-    deliveryTime: '' as '' | 'today' | 'tomorrow' | '2-days',
+    deliveryTime: '',
     notes: '',
     latitude: undefined as number | undefined,
     longitude: undefined as number | undefined,
@@ -79,6 +81,11 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     customerName: string;
     customerPhone: string;
     productName: string;
+    address?: string;
+    city?: string;
+    price?: string;
+    agent?: string;
+    deliveryOption?: string;
     notes?: string;
   }>>([]);
 
@@ -97,55 +104,58 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     setEditingData({});
   };
 
-  const parseMagicBoxData = (data: string) => {
-    const lines = data.trim().split('\n').filter(line => line.trim());
+    const parseMagicBoxData = (data: string) => {
+    const lines = data.trim().split('\n');
     const parsed: Array<{
       customerName: string;
       customerPhone: string;
       productName: string;
+      address?: string;
+      city?: string;
+      price?: string;
+      agent?: string;
+      deliveryOption?: string;
       notes?: string;
     }> = [];
 
     for (const line of lines) {
-      const columns = line.split('\t'); // Excel uses tabs
+      if (!line.trim()) continue;
       
-      // Handle flexible column formats
-      if (columns.length >= 2) {
-        // Try to identify phone number (starts with digits, longer than 7 chars)
-        const phoneIndex = columns.findIndex(col => {
-          const trimmed = col.trim();
-          return /^\d{7,}$/.test(trimmed);
-        });
-        
-        // Last column is usually the product
-        const productName = columns[columns.length - 1]?.trim() || '';
-        const customerName = columns[0]?.trim() || '';
-        const customerPhone = phoneIndex >= 0 ? columns[phoneIndex]?.trim() || '' : '';
-        
-        // Everything between name and phone/product can be notes (address, etc)
-        const notes = columns.slice(1, phoneIndex >= 0 ? phoneIndex : columns.length - 1)
-          .map(c => c.trim())
-          .filter(c => c)
-          .join(' ');
+      // Split by tabs - expect 8 columns
+      const columns = line.split('\t');
+      
+      if (columns.length >= 5) {
+        const name = columns[0]?.trim() || '';
+        const address = columns[1]?.trim() || '';
+        const city = columns[2]?.trim() || '';
+        const mobile = columns[3]?.trim() || '';
+        const product = columns[4]?.trim() || '';
+        const price = columns[5]?.trim() || '';
+        const agent = columns[6]?.trim() || '';
+        const delivery = columns[7]?.trim() || '';
 
         parsed.push({
-          customerName,
-          customerPhone,
-          productName,
-          notes: notes || undefined,
+          customerName: name,
+          customerPhone: mobile,
+          productName: product,
+          address: address,
+          city: city,
+          price: price,
+          agent: agent,
+          deliveryOption: delivery,
+          notes: `${address}${city ? ', ' + city : ''} | Price: ${price} | Agent: ${agent} | Delivery: ${delivery}`
         });
       }
     }
 
-    return parsed;
+    setParsedOrders(parsed);
   };
 
   const handleMagicBoxPaste = (e: React.ClipboardEvent) => {
     e.preventDefault(); // Prevent default paste to avoid duplication
     const pastedData = e.clipboardData.getData('text');
     setMagicBoxData(pastedData);
-    const parsed = parseMagicBoxData(pastedData);
-    setParsedOrders(parsed);
+    parseMagicBoxData(pastedData);
   };
 
   const importMagicBoxOrders = async () => {
@@ -153,24 +163,95 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
 
     setSaving(true);
     let successCount = 0;
+    let createdCustomers = 0;
+    let createdProducts = 0;
     
     for (const order of parsedOrders) {
-      // Find matching customer by name or phone
-      const customer = customers.find(c => 
-        c.name.toLowerCase() === order.customerName.toLowerCase() ||
-        c.phone === order.customerPhone
-      );
+      // Find matching customer by phone number ONLY
+      let customer = customers.find(c => c.phone === order.customerPhone);
       
-      // Find matching product by name
-      const product = products.find(p => 
-        p.title.toLowerCase().includes(order.productName.toLowerCase())
+      // Create customer if not found
+      if (!customer && onCreateCustomer) {
+        const customerId = await onCreateCustomer({
+          name: order.customerName,
+          phone: order.customerPhone,
+          email: `${order.customerPhone}@temp.com`, // Temporary email
+          address: order.address || '',
+        });
+        
+        if (customerId) {
+          createdCustomers++;
+          // Create a temporary customer object for this import
+          customer = {
+            _id: customerId,
+            name: order.customerName,
+            phone: order.customerPhone,
+            email: `${order.customerPhone}@temp.com`,
+            address: order.address || '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            totalOrders: 0,
+          };
+        }
+      }
+      
+      // Find matching product by name (case-insensitive partial match)
+      let product = products.find(p => 
+        p.title.toLowerCase().includes(order.productName.toLowerCase()) ||
+        order.productName.toLowerCase().includes(p.title.toLowerCase())
       );
 
+      // Create product if not found
+      if (!product && onCreateProduct) {
+        const price = order.price ? parseFloat(order.price.replace(/[^0-9.]/g, '')) : 0;
+        const productId = await onCreateProduct({
+          title: order.productName,
+          price: isNaN(price) ? 0 : price,
+          category: 'General',
+          inStock: true,
+          imageUrl: '',
+        });
+        
+        if (productId) {
+          createdProducts++;
+          // Create a temporary product object for this import
+          product = {
+            _id: productId,
+            title: order.productName,
+            price: isNaN(price) ? 0 : price,
+            category: 'General',
+            inStock: true,
+            imageUrl: '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      }
+
       if (customer && product) {
+        // Map delivery option to delivery time
+        let deliveryTime: string | undefined;
+        if (order.deliveryOption) {
+          const deliveryLower = order.deliveryOption.toLowerCase();
+          if (deliveryLower.includes('today') || deliveryLower.includes('express') || deliveryLower.includes('same day')) {
+            deliveryTime = 'today';
+          } else if (deliveryLower.includes('tomorrow') || deliveryLower.includes('next day')) {
+            deliveryTime = 'tomorrow';
+          } else if (deliveryLower.includes('2') || deliveryLower.includes('two') || deliveryLower.includes('2-day')) {
+            deliveryTime = '2-days';
+          } else {
+            // Use the custom delivery option value directly
+            deliveryTime = order.deliveryOption;
+          }
+        }
+        
+        console.log(`📦 Creating order for ${order.customerName} with deliveryTime:`, deliveryTime);
+        
         const success = await onCreateOrder({
           customerId: customer._id,
           productId: product._id,
           priority: 'medium',
+          deliveryTime: deliveryTime,
           notes: order.notes,
           latitude: undefined,
           longitude: undefined,
@@ -185,7 +266,13 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     setMagicBoxData('');
     setParsedOrders([]);
     
-    alert(`Successfully imported ${successCount} out of ${parsedOrders.length} orders!`);
+    const message = [
+      `Successfully imported ${successCount} out of ${parsedOrders.length} orders!`,
+      createdCustomers > 0 ? `Created ${createdCustomers} new customers` : null,
+      createdProducts > 0 ? `Created ${createdProducts} new products` : null,
+    ].filter(Boolean).join('\n');
+    
+    alert(message);
   };
 
   const handleLocationPaste = (e: React.ClipboardEvent, isEditing: boolean) => {
@@ -388,11 +475,14 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
           <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
             <div className="mb-3">
               <h4 className="font-semibold text-purple-800 mb-1">Bulk Import Orders from Excel</h4>
-              <p className="text-sm text-purple-600">
-                Paste Excel data. Smart detection finds: <strong>Customer Name (first) | Phone (digits) | Product (last)</strong>
+              <p className="text-sm text-purple-600 mb-1">
+                Paste Excel data with <strong>8 columns</strong> (tab-separated):
+              </p>
+              <p className="text-xs text-purple-700 font-mono bg-purple-100 px-2 py-1 rounded">
+                Name | Address | City | Mobile | Product | Price | Agent | Delivery Option
               </p>
               <p className="text-xs text-purple-500 mt-1">
-                Example: YOUNUS | Barwa road Doha | QATAR | 97430837436 | YAMANI KHALTA
+                Example: YOUNUS | Barwa road Barwa camp | DOHA | 97430837436 | YAMANI KHALTA | 100 | Ahmad | Express
               </p>
             </div>
             
@@ -400,7 +490,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
               value={magicBoxData}
               onChange={(e) => setMagicBoxData(e.target.value)}
               onPaste={handleMagicBoxPaste}
-              placeholder="Paste your Excel data here (tab-separated)..."
+              placeholder="Paste your Excel data here (tab-separated)...&#10;Format: Name | Address | City | Mobile | Product | Price | Agent | Delivery"
               className="w-full h-32 p-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
             
@@ -409,14 +499,18 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 <p className="text-sm font-medium text-purple-700 mb-2">
                   Preview: {parsedOrders.length} orders detected
                 </p>
-                <div className="max-h-48 overflow-y-auto bg-white border border-purple-200 rounded">
+                <div className="max-h-48 overflow-y-auto overflow-x-auto bg-white border border-purple-200 rounded">
                   <table className="min-w-full text-sm">
                     <thead className="bg-purple-100 sticky top-0">
                       <tr>
                         <th className="px-3 py-2 text-left text-purple-800">Customer</th>
                         <th className="px-3 py-2 text-left text-purple-800">Phone</th>
+                        <th className="px-3 py-2 text-left text-purple-800">Address</th>
+                        <th className="px-3 py-2 text-left text-purple-800">City</th>
                         <th className="px-3 py-2 text-left text-purple-800">Product</th>
-                        <th className="px-3 py-2 text-left text-purple-800">Notes</th>
+                        <th className="px-3 py-2 text-left text-purple-800">Price</th>
+                        <th className="px-3 py-2 text-left text-purple-800">Agent</th>
+                        <th className="px-3 py-2 text-left text-purple-800">Delivery</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -424,8 +518,12 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                         <tr key={idx} className="border-t border-purple-100">
                           <td className="px-3 py-2">{order.customerName || '—'}</td>
                           <td className="px-3 py-2">{order.customerPhone || '—'}</td>
+                          <td className="px-3 py-2">{order.address || '—'}</td>
+                          <td className="px-3 py-2">{order.city || '—'}</td>
                           <td className="px-3 py-2">{order.productName || '—'}</td>
-                          <td className="px-3 py-2 text-gray-600">{order.notes || '—'}</td>
+                          <td className="px-3 py-2">{order.price || '—'}</td>
+                          <td className="px-3 py-2">{order.agent || '—'}</td>
+                          <td className="px-3 py-2">{order.deliveryOption || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -461,9 +559,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Order ID
-              </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Customer
               </th>
@@ -502,14 +597,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 const hasInvalidLocation = !order.latitude || !order.longitude || (order.latitude === 0 && order.longitude === 0);
                 return (
                 <tr key={order._id} className={`${editingId === order._id ? "bg-blue-50" : "hover:bg-gray-50"} ${hasInvalidLocation ? "border-l-4 border-l-orange-500" : ""}`}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {order.externalId || `#${order._id.slice(-6)}`}
-                      {hasInvalidLocation && (
-                        <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">⚠️ No Location</span>
-                      )}
-                    </div>
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{order.customerName}</div>
                     <div className="text-sm text-gray-500">{order.customerPhone}</div>
@@ -617,27 +704,40 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                   {/* Delivery Time */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     {editingId === order._id ? (
-                      <select
-                        value={editingData.deliveryTime || order.deliveryTime || ''}
-                        onChange={(e) => setEditingData({ ...editingData, deliveryTime: e.target.value as any })}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="">Select Time</option>
-                        <option value="today">Today</option>
-                        <option value="tomorrow">Tomorrow</option>
-                        <option value="2-days">2 Days After</option>
-                      </select>
+                      <div className="flex flex-col gap-1">
+                        <select
+                          value={editingData.deliveryTime || order.deliveryTime || ''}
+                          onChange={(e) => setEditingData({ ...editingData, deliveryTime: e.target.value })}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        >
+                          <option value="">Not Set</option>
+                          <option value="today">Today</option>
+                          <option value="tomorrow">Tomorrow</option>
+                          <option value="2-days">2 Days After</option>
+                          {order.deliveryTime && !['', 'today', 'tomorrow', '2-days'].includes(order.deliveryTime) && (
+                            <option value={order.deliveryTime}>{order.deliveryTime}</option>
+                          )}
+                        </select>
+                        <input
+                          type="text"
+                          value={editingData.deliveryTime || order.deliveryTime || ''}
+                          onChange={(e) => setEditingData({ ...editingData, deliveryTime: e.target.value })}
+                          placeholder="Or type custom..."
+                          className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
                     ) : (
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                         order.deliveryTime === 'today' ? 'bg-red-100 text-red-800' :
                         order.deliveryTime === 'tomorrow' ? 'bg-yellow-100 text-yellow-800' :
                         order.deliveryTime === '2-days' ? 'bg-green-100 text-green-800' :
+                        order.deliveryTime ? 'bg-blue-100 text-blue-800' :
                         'bg-gray-100 text-gray-600'
                       }`}>
                         {order.deliveryTime === 'today' ? 'Today' :
                          order.deliveryTime === 'tomorrow' ? 'Tomorrow' :
                          order.deliveryTime === '2-days' ? '2 Days After' :
-                         'Not Set'}
+                         order.deliveryTime || 'Not Set'}
                       </span>
                     )}
                   </td>
@@ -743,9 +843,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
             {/* New order row */}
             {showNewRow && (
               <tr className="bg-green-50 border-2 border-green-200">
-                <td className="px-6 py-4 text-center text-gray-400 text-sm">
-                  New
-                </td>
                 <td className="px-6 py-4">
                   <select
                     value={newOrder.customerId}

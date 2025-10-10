@@ -117,7 +117,7 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
     }
   };
 
-  const handleDeliveryTimeUpdate = (deliveryId: string, deliveryTime: 'today' | 'tomorrow' | '2-days') => {
+  const handleDeliveryTimeUpdate = (deliveryId: string, deliveryTime: string) => {
     // Update local state
     setDeliveries(prev =>
       prev.map(delivery =>

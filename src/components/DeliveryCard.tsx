@@ -6,7 +6,7 @@ import { useState } from 'react';
 interface DeliveryCardProps {
   delivery: DeliveryWithDistance;
   onStatusUpdate?: (deliveryId: string, status: Delivery['status']) => void;
-  onDeliveryTimeUpdate?: (deliveryId: string, deliveryTime: 'today' | 'tomorrow' | '2-days') => void;
+  onDeliveryTimeUpdate?: (deliveryId: string, deliveryTime: string) => void;
 }
 
 export function DeliveryCard({ delivery, onStatusUpdate, onDeliveryTimeUpdate }: DeliveryCardProps) {
@@ -83,7 +83,7 @@ export function DeliveryCard({ delivery, onStatusUpdate, onDeliveryTimeUpdate }:
   };
 
   const handleDeliveryTimeChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newTime = e.target.value as 'today' | 'tomorrow' | '2-days';
+    const newTime = e.target.value;
     if (!newTime) return;
     
     setIsUpdating(true);

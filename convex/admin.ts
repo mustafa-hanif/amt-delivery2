@@ -247,7 +247,7 @@ export const updateOrder = mutation({
     id: v.id("deliveries"),
     status: v.union(v.literal("Pending"), v.literal("On Way"), v.literal("Delivered"), v.literal("No Answer"), v.literal("Cancelled")),
     priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("urgent")),
-    deliveryTime: v.optional(v.union(v.literal("today"), v.literal("tomorrow"), v.literal("2-days"))),
+    deliveryTime: v.optional(v.string()),
     notes: v.optional(v.string()),
     productId: v.optional(v.id("products")),
     driverId: v.optional(v.id("drivers")),
@@ -300,7 +300,7 @@ export const createOrder = mutation({
       v.literal("high"),
       v.literal("urgent")
     ),
-    deliveryTime: v.optional(v.union(v.literal("today"), v.literal("tomorrow"), v.literal("2-days"))),
+    deliveryTime: v.optional(v.string()),
     notes: v.optional(v.string()),
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),

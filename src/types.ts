@@ -19,7 +19,7 @@ export interface Delivery {
   longitude: number;
   status: 'Pending' | 'On Way' | 'Delivered' | 'No Answer' | 'Cancelled'; // Updated status values
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  deliveryTime?: 'today' | 'tomorrow' | '2-days';
+  deliveryTime?: string; // Can be 'today', 'tomorrow', '2-days', or any custom value
   estimatedDeliveryTime?: string;
   notes?: string;
   orderValue?: number;

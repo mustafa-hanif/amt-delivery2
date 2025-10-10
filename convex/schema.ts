@@ -51,7 +51,7 @@ export default defineSchema({
     longitude: v.number(),
     status: statusEnum,
     priority: priorityEnum,
-    deliveryTime: v.optional(deliveryTimeEnum),
+    deliveryTime: v.optional(v.string()),
     estimatedDeliveryTime: v.optional(v.string()),
     notes: v.optional(v.string()),
     orderValue: v.optional(v.number()),
