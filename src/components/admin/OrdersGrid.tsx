@@ -275,6 +275,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       'Mobile',
       'Product',
       'Price (AED)',
+      'Agent Name',
       'Driver',
       'Delivery Option',
       'Status',
@@ -286,26 +287,33 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     ];
 
     // Map orders to CSV rows
-    const rows = sortedOrders.map(order => [
-      order._id,
-      order.customerName,
-      order.customerAddress || '',
-      order.customerCity || '',
-      order.customerPhone,
-      order.product ? (order.product.title || order.product.name) : '',
-      (order.orderValue || (order.product?.raw as any)?.price || 0).toFixed(2),
-      order.driverId ? (drivers?.find(d => d._id === order.driverId)?.name || 'Assigned') : '',
-      order.deliveryTime === 'today' ? 'Today' :
-        order.deliveryTime === 'tomorrow' ? 'Tomorrow' :
-        order.deliveryTime === '2-days' ? '2 Days After' :
-        order.deliveryTime || '',
-      order.status,
-      order.priority,
-      order.notes || '',
-      order.latitude || '',
-      order.longitude || '',
-      new Date(order.createdAt).toLocaleString()
-    ]);
+    const rows = sortedOrders.map(order => {
+      // Extract agent from notes
+      const agentMatch = order.notes?.match(/Agent:\s*([^|]+)/);
+      const agentName = agentMatch?.[1]?.trim() || '';
+      
+      return [
+        order._id,
+        order.customerName,
+        order.customerAddress || '',
+        order.customerCity || '',
+        order.customerPhone,
+        order.product ? (order.product.title || order.product.name) : '',
+        (order.orderValue || (order.product?.raw as any)?.price || 0).toFixed(2),
+        agentName,
+        order.driverId ? (drivers?.find(d => d._id === order.driverId)?.name || 'Assigned') : '',
+        order.deliveryTime === 'today' ? 'Today' :
+          order.deliveryTime === 'tomorrow' ? 'Tomorrow' :
+          order.deliveryTime === '2-days' ? '2 Days After' :
+          order.deliveryTime || '',
+        order.status,
+        order.priority,
+        order.notes || '',
+        order.latitude || '',
+        order.longitude || '',
+        new Date(order.createdAt).toLocaleString()
+      ];
+    });
 
     // Create CSV content
     const csvContent = [
@@ -576,10 +584,16 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 Price
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Agent Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Driver
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Delivery Option
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Location
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
@@ -592,7 +606,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
           <tbody className="bg-white divide-y divide-gray-200">
             {localOrders.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={11} className="px-6 py-4 text-center text-gray-500">
                   No orders found. Use the 🛒 button in the Customers tab to create orders.
                 </td>
               </tr>
@@ -644,7 +658,17 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                       AED {(order.orderValue || (order.product?.raw as any)?.price || 0).toFixed(2)}
                     </div>
                   </td>
-                  {/* Agent (Driver) */}
+                  {/* Agent Name - Extract from notes if available */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">
+                      {(() => {
+                        // Try to extract agent from notes (format: "... | Agent: Name | ...")
+                        const match = order.notes?.match(/Agent:\s*([^|]+)/);
+                        return match?.[1]?.trim() || '-';
+                      })()}
+                    </div>
+                  </td>
+                  {/* Driver (Dropdown) */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     {editingId === order._id ? (
                       <select
@@ -739,6 +763,32 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                          order.deliveryTime === '2-days' ? '2 Days After' :
                          order.deliveryTime || 'Not Set'}
                       </span>
+                    )}
+                  </td>
+                  {/* Location */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {editingId === order._id ? (
+                      <input
+                        type="text"
+                        placeholder="Paste Google Maps URL"
+                        onPaste={(e) => handleLocationPaste(e, true)}
+                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    ) : (
+                      <div className="text-xs text-gray-500">
+                        {order.latitude && order.longitude && order.latitude !== 0 && order.longitude !== 0 ? (
+                          <a
+                            href={`https://www.google.com/maps?q=${order.latitude},${order.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 underline"
+                          >
+                            📍 Map
+                          </a>
+                        ) : (
+                          <span className="text-orange-600">⚠️ No location</span>
+                        )}
+                      </div>
                     )}
                   </td>
                   {/* Status */}
