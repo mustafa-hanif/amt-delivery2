@@ -179,9 +179,9 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
   }
 
   return (
-    <div className="delivery-list px-4 sm:px-6 lg:px-8 py-4">
+    <div className="delivery-list px-2 lg:px-8 py-4">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-4">My Deliveries</h1>
+        <h1 className="text-2xl hidden md:block font-bold text-gray-800 mb-4">My Deliveries</h1>
 
         {/* Location Status */}
         <div className="bg-gray-50 p-3 rounded-lg mb-4">
@@ -192,18 +192,18 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
                 <div>
                   Location: {locationPermission === null ? 'Checking...' :
                     locationPermission ? 'Enabled' : 'Disabled'}
-                  {driverLocation && (
+                  {/* {driverLocation && (
                     <span className="ml-2 text-xs font-mono bg-blue-50 px-2 py-1 rounded">
                       ({driverLocation.latitude.toFixed(6)}, {driverLocation.longitude.toFixed(6)})
                     </span>
-                  )}
+                  )} */}
                 </div>
               </span>
-              {driverLocation && (
+              {/* {driverLocation && (
                 <span className="text-xs text-gray-500">
                   (Updated {new Date(driverLocation.timestamp).toLocaleTimeString()})
                 </span>
-              )}
+              )} */}
             </div>
             <button
               onClick={refreshLocation}

@@ -132,7 +132,7 @@ export function AdminDashboard() {
               <p className="text-gray-500">Manage your delivery operations</p>
             </div>
             <div className="flex gap-3">
-              <button
+              {/* <button
                 onClick={runMigration}
                 disabled={loading}
                 className="bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
@@ -148,7 +148,7 @@ export function AdminDashboard() {
                     <Wrench size={16} /> Fix Schema
                   </>
                 )}
-              </button>
+              </button> */}
               <button
                 onClick={loadData}
                 disabled={loading}
@@ -268,7 +268,7 @@ export function AdminDashboard() {
                   </div>
                 )}
               </div>
-              <DriversGrid drivers={drivers.filter(d => d.isActive).slice(0, 5)} loading={loading} />
+              <DriversGrid drivers={drivers.filter(d => d.isActive).slice(0, 5)} orders={orders} loading={loading} />
             </div>
           </div>
         )}
@@ -332,7 +332,8 @@ export function AdminDashboard() {
 
         {activeTab === 'drivers' && (
           <DriversGrid 
-            drivers={drivers} 
+            drivers={drivers}
+            orders={orders}
             loading={loading}
             onCreateDriver={async (driverData) => {
               const success = await adminService.createDriver(driverData);

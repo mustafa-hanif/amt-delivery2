@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Edit2, Truck, Plus, X, Check, Loader2, Trash2 } from "lucide-react";
+import { Edit2, Truck, Plus, X, Check, Loader2, Trash2, Download } from "lucide-react";
 import type { Delivery, Customer, Product, Driver } from "../../types";
 
 // Function to extract lat/lng from Google Maps URL
@@ -64,16 +64,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
   const [localOrders, setLocalOrders] = useState<Delivery[]>(orders);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<Partial<Delivery>>({});
-  const [showNewRow, setShowNewRow] = useState(false);
-  const [newOrder, setNewOrder] = useState({
-    customerId: '',
-    productId: '',
-    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
-    deliveryTime: '',
-    notes: '',
-    latitude: undefined as number | undefined,
-    longitude: undefined as number | undefined,
-  });
   const [saving, setSaving] = useState(false);
   const [showMagicBox, setShowMagicBox] = useState(false);
   const [magicBoxData, setMagicBoxData] = useState('');
@@ -275,6 +265,75 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     alert(message);
   };
 
+  const downloadOrdersCSV = () => {
+    // Define CSV headers
+    const headers = [
+      'Order ID',
+      'Customer Name',
+      'Address',
+      'City',
+      'Mobile',
+      'Product',
+      'Price (AED)',
+      'Driver',
+      'Delivery Option',
+      'Status',
+      'Priority',
+      'Notes',
+      'Latitude',
+      'Longitude',
+      'Created At'
+    ];
+
+    // Map orders to CSV rows
+    const rows = sortedOrders.map(order => [
+      order._id,
+      order.customerName,
+      order.customerAddress || '',
+      order.customerCity || '',
+      order.customerPhone,
+      order.product ? (order.product.title || order.product.name) : '',
+      (order.orderValue || (order.product?.raw as any)?.price || 0).toFixed(2),
+      order.driverId ? (drivers?.find(d => d._id === order.driverId)?.name || 'Assigned') : '',
+      order.deliveryTime === 'today' ? 'Today' :
+        order.deliveryTime === 'tomorrow' ? 'Tomorrow' :
+        order.deliveryTime === '2-days' ? '2 Days After' :
+        order.deliveryTime || '',
+      order.status,
+      order.priority,
+      order.notes || '',
+      order.latitude || '',
+      order.longitude || '',
+      new Date(order.createdAt).toLocaleString()
+    ]);
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => {
+        // Escape cells that contain commas, quotes, or newlines
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `orders_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleLocationPaste = (e: React.ClipboardEvent, isEditing: boolean) => {
     const pastedText = e.clipboardData.getData('text');
     
@@ -284,19 +343,11 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       const location = extractLocationFromUrl(pastedText);
       
       if (location.latitude && location.longitude) {
-        if (isEditing) {
-          setEditingData(prev => ({
-            ...prev,
-            latitude: location.latitude,
-            longitude: location.longitude,
-          }));
-        } else {
-          setNewOrder(prev => ({
-            ...prev,
-            latitude: location.latitude,
-            longitude: location.longitude,
-          }));
-        }
+        setEditingData(prev => ({
+          ...prev,
+          latitude: location.latitude,
+          longitude: location.longitude,
+        }));
       }
     }
   };
@@ -354,58 +405,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     }
   };
 
-  const startNewOrder = () => {
-    setShowNewRow(true);
-    setNewOrder({
-      customerId: '',
-      productId: '',
-      priority: 'medium',
-      deliveryTime: '',
-      notes: '',
-      latitude: undefined,
-      longitude: undefined,
-    });
-  };
-
-  const cancelNewOrder = () => {
-    setShowNewRow(false);
-    setNewOrder({
-      customerId: '',
-      productId: '',
-      priority: 'medium',
-      deliveryTime: '',
-      notes: '',
-      latitude: undefined,
-      longitude: undefined,
-    });
-  };
-
-  const saveNewOrder = async () => {
-    if (!onCreateOrder) return;
-    
-    // Basic validation
-    if (!newOrder.customerId || !newOrder.productId) {
-      alert('Customer and Product are required');
-      return;
-    }
-
-    setSaving(true);
-    const success = await onCreateOrder({
-      customerId: newOrder.customerId,
-      productId: newOrder.productId,
-      priority: newOrder.priority,
-      deliveryTime: newOrder.deliveryTime || undefined,
-      notes: newOrder.notes || undefined,
-      latitude: newOrder.latitude,
-      longitude: newOrder.longitude,
-    });
-
-    if (success) {
-      cancelNewOrder();
-    }
-    setSaving(false);
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending': return 'bg-yellow-100 text-yellow-800';
@@ -454,19 +453,18 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-500">{orders.length} total</span>
             <button
+              onClick={downloadOrdersCSV}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+              title="Download orders as CSV"
+            >
+              <Download size={18} /> Download CSV
+            </button>
+            <button
               onClick={() => setShowMagicBox(!showMagicBox)}
               className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
             >
               <Plus size={18} /> Magic Box
             </button>
-            {!showNewRow && onCreateOrder && (
-              <button
-                onClick={startNewOrder}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-              >
-                <Plus size={18} /> Add New Row
-              </button>
-            )}
           </div>
         </div>
         
@@ -560,25 +558,31 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Customer
+                Customer Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Driver
+                Address
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                City
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Mobile
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Product
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Price
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Driver
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Delivery Option
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Delivery Time
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Notes
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Location
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -586,9 +590,9 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {localOrders.length === 0 && !showNewRow ? (
+            {localOrders.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={10} className="px-6 py-4 text-center text-gray-500">
                   No orders found. Use the 🛒 button in the Customers tab to create orders.
                 </td>
               </tr>
@@ -597,10 +601,50 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 const hasInvalidLocation = !order.latitude || !order.longitude || (order.latitude === 0 && order.longitude === 0);
                 return (
                 <tr key={order._id} className={`${editingId === order._id ? "bg-blue-50" : "hover:bg-gray-50"} ${hasInvalidLocation ? "border-l-4 border-l-orange-500" : ""}`}>
+                  {/* Customer Name */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{order.customerName}</div>
+                  </td>
+                  {/* Address */}
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900">{order.customerAddress || '-'}</div>
+                  </td>
+                  {/* City */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{order.customerCity || '-'}</div>
+                  </td>
+                  {/* Mobile */}
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-500">{order.customerPhone}</div>
                   </td>
+                  {/* Product */}
+                  <td className="px-6 py-4">
+                    {editingId === order._id ? (
+                      <select
+                        value={editingData.productId || order.productId || ''}
+                        onChange={(e) => setEditingData({ ...editingData, productId: e.target.value })}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">Select Product</option>
+                        {products.filter(p => p.inStock).map(product => (
+                          <option key={product._id} value={product._id}>
+                            {product.title} - AED {product.price.toFixed(2)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : order.product ? (
+                      <div className="text-sm font-medium text-gray-900">{order.product.title || order.product.name}</div>
+                    ) : (
+                      <span className="text-sm text-gray-400">No product info</span>
+                    )}
+                  </td>
+                  {/* Price */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      AED {(order.orderValue || (order.product?.raw as any)?.price || 0).toFixed(2)}
+                    </div>
+                  </td>
+                  {/* Agent (Driver) */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     {editingId === order._id ? (
                       <select
@@ -611,7 +655,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                         <option value="">No Driver</option>
                         {drivers?.map(driver => (
                           <option key={driver._id} value={driver._id}>
-                            {driver.name} ({driver.vehicleType})
+                            {driver.name}
                           </option>
                         ))}
                       </select>
@@ -651,57 +695,13 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                         <option value="">No Driver</option>
                         {drivers?.map(driver => (
                           <option key={driver._id} value={driver._id}>
-                            {driver.name} ({driver.vehicleType})
+                            {driver.name}
                           </option>
                         ))}
                       </select>
                     )}
                   </td>
-                  <td className="px-6 py-4">
-                    {editingId === order._id ? (
-                      <select
-                        value={editingData.productId || order.productId || ''}
-                        onChange={(e) => setEditingData({ ...editingData, productId: e.target.value })}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="">Select Product</option>
-                        {products.filter(p => p.inStock).map(product => (
-                          <option key={product._id} value={product._id}>
-                            {product.title} - AED {product.price.toFixed(2)}
-                          </option>
-                        ))}
-                      </select>
-                    ) : order.product ? (
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{order.product.title || order.product.name}</div>
-                        <div className="text-xs text-gray-500">
-                          AED {((order.product.raw as any)?.price || order.orderValue || 0).toFixed(2)} • {(order.product.raw as any)?.category || 'N/A'}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-gray-400">No product info</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {editingId === order._id ? (
-                      <select
-                        value={editingData.status || order.status}
-                        onChange={(e) => setEditingData({ ...editingData, status: e.target.value as any })}
-                        className="border border-gray-300 rounded px-2 py-1 text-xs"
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="On Way">On Way</option>
-                        <option value="Delivered">Delivered</option>
-                        <option value="No Answer">No Answer</option>
-                        <option value="Cancelled">Cancelled</option>
-                      </select>
-                    ) : (
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                        {order.status}
-                      </span>
-                    )}
-                  </td>
-                  {/* Delivery Time */}
+                  {/* Delivery Option */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     {editingId === order._id ? (
                       <div className="flex flex-col gap-1">
@@ -741,61 +741,27 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
+                  {/* Status */}
+                  <td className="px-6 py-4 whitespace-nowrap">
                     {editingId === order._id ? (
-                      <textarea
-                        value={editingData.notes || order.notes || ''}
-                        onChange={(e) => setEditingData({ ...editingData, notes: e.target.value })}
-                        className="border border-gray-300 rounded px-2 py-1 text-xs w-full"
-                        rows={2}
-                        placeholder="Order notes..."
-                      />
+                      <select
+                        value={editingData.status || order.status}
+                        onChange={(e) => setEditingData({ ...editingData, status: e.target.value as any })}
+                        className="border border-gray-300 rounded px-2 py-1 text-xs"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="On Way">On Way</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="No Answer">No Answer</option>
+                        <option value="Cancelled">Cancelled</option>
+                      </select>
                     ) : (
-                      order.notes || '-'
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                        {order.status}
+                      </span>
                     )}
                   </td>
-                  {/* Location */}
-                  <td className="px-6 py-4">
-                    {editingId === order._id ? (
-                      <div>
-                        <div className="flex gap-1 mb-1">
-                          <input
-                            type="number"
-                            step="any"
-                            value={editingData.latitude ?? order.latitude ?? ''}
-                            onChange={(e) => setEditingData({ ...editingData, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
-                            className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="Lat"
-                            disabled={saving}
-                          />
-                          <input
-                            type="number"
-                            step="any"
-                            value={editingData.longitude ?? order.longitude ?? ''}
-                            onChange={(e) => setEditingData({ ...editingData, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
-                            className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="Lng"
-                            disabled={saving}
-                          />
-                        </div>
-                        <input
-                          type="text"
-                          onPaste={(e) => handleLocationPaste(e, true)}
-                          className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          placeholder="📍 Paste Google Maps link"
-                          disabled={saving}
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-900">
-                        {order.latitude && order.longitude ? (
-                          <>{order.latitude.toFixed(4)}, {order.longitude.toFixed(4)}</>
-                        ) : (
-                          '-'
-                        )}
-                      </div>
-                    )}
-                  </td>
+                  {/* Actions */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {editingId === order._id ? (
                       <div className="flex space-x-2">
@@ -838,124 +804,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 </tr>
               );
               })
-            )}
-
-            {/* New order row */}
-            {showNewRow && (
-              <tr className="bg-green-50 border-2 border-green-200">
-                <td className="px-6 py-4">
-                  <select
-                    value={newOrder.customerId}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, customerId: e.target.value }))}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                    disabled={saving}
-                  >
-                    <option value="">Select Customer *</option>
-                    {customers.map(customer => (
-                      <option key={customer._id} value={customer._id}>
-                        {customer.name} - {customer.phone}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-6 py-4 text-center text-gray-400 text-sm">
-                  Not assigned
-                </td>
-                <td className="px-6 py-4">
-                  <select
-                    value={newOrder.productId}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, productId: e.target.value }))}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                    disabled={saving}
-                  >
-                    <option value="">Select Product *</option>
-                    {products.filter(p => p.inStock).map(product => (
-                      <option key={product._id} value={product._id}>
-                        {product.title} - AED {product.price.toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-6 py-4 text-center text-gray-400 text-sm">
-                  Pending
-                </td>
-                {/* Delivery Time */}
-                <td className="px-6 py-4">
-                  <select
-                    value={newOrder.deliveryTime || ''}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, deliveryTime: e.target.value as any }))}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                    disabled={saving}
-                  >
-                    <option value="">Select Time</option>
-                    <option value="today">Today</option>
-                    <option value="tomorrow">Tomorrow</option>
-                    <option value="2-days">2 Days After</option>
-                  </select>
-                </td>
-                <td className="px-6 py-4">
-                  <textarea
-                    value={newOrder.notes}
-                    onChange={(e) => setNewOrder(prev => ({ ...prev, notes: e.target.value }))}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                    rows={2}
-                    placeholder="Order notes (optional)"
-                    disabled={saving}
-                  />
-                </td>
-                {/* Location */}
-                <td className="px-6 py-4">
-                  <div>
-                    <div className="flex gap-1 mb-1">
-                      <input
-                        type="number"
-                        step="any"
-                        value={newOrder.latitude ?? ''}
-                        onChange={(e) => setNewOrder(prev => ({ ...prev, latitude: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                        className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        placeholder="Lat"
-                        disabled={saving}
-                      />
-                      <input
-                        type="number"
-                        step="any"
-                        value={newOrder.longitude ?? ''}
-                        onChange={(e) => setNewOrder(prev => ({ ...prev, longitude: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                        className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        placeholder="Lng"
-                        disabled={saving}
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      onPaste={(e) => handleLocationPaste(e, false)}
-                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                      placeholder="📍 Paste Google Maps link"
-                      disabled={saving}
-                    />
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      onClick={saveNewOrder}
-                      disabled={saving}
-                      className="text-green-600 hover:text-green-800 px-2 py-1 rounded transition-colors disabled:opacity-50"
-                      title="Save New Order"
-                    >
-                      {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                    </button>
-                    <button
-                      onClick={cancelNewOrder}
-                      disabled={saving}
-                      className="text-red-600 hover:text-red-800 px-2 py-1 rounded transition-colors disabled:opacity-50"
-                      title="Cancel"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
             )}
           </tbody>
         </table>

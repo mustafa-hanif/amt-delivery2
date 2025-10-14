@@ -121,7 +121,7 @@ export function DeliveryCard({ delivery, onStatusUpdate, onDeliveryTimeUpdate }:
             )}
           </div>
           {/* Debug: Show coordinates */}
-          {delivery.latitude && delivery.longitude && delivery.latitude !== 0 && delivery.longitude !== 0 && (
+          {/* {delivery.latitude && delivery.longitude && delivery.latitude !== 0 && delivery.longitude !== 0 && (
             <div className="text-xs text-gray-400 mt-1 font-mono">
               Destination: ({delivery.latitude.toFixed(6)}, {delivery.longitude.toFixed(6)})
             </div>
@@ -130,7 +130,7 @@ export function DeliveryCard({ delivery, onStatusUpdate, onDeliveryTimeUpdate }:
             <div className="text-xs text-orange-500 mt-1">
               ⚠️ No location set for this delivery - add it in admin panel
             </div>
-          )}
+          )} */}
         </div>
         <div className="flex flex-col items-end gap-2">
           <span className={`px-2 py-1 rounded-full text-white text-xs font-medium ${getStatusColor(delivery.status)}`}>
@@ -145,13 +145,13 @@ export function DeliveryCard({ delivery, onStatusUpdate, onDeliveryTimeUpdate }:
       )}
 
       {/* Delivery Time Selector */}
-      <div className="mb-3">
+      <div className="mb-3 ">
         <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Time</label>
         <select
           value={delivery.deliveryTime || ''}
           onChange={handleDeliveryTimeChange}
           disabled={isUpdating}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+          className="w-full bg-green-100 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
         >
           <option value="">Not Set</option>
           <option value="today">Today</option>

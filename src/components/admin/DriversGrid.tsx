@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Plus, Edit2, X, Check, Loader2, Car, Bike, Star, Truck } from 'lucide-react';
-import type { Driver } from "../../types";
+import { Plus, Edit2, X, Check, Loader2, Car, Bike, Star, Truck, Download } from 'lucide-react';
+import type { Driver, Delivery } from "../../types";
 
 interface DriversGridProps {
   drivers: Driver[];
+  orders?: Delivery[]; // Add orders prop
   loading?: boolean;
   onCreateDriver?: (driverData: Omit<Driver, '_id' | 'createdAt' | 'updatedAt' | 'isActive' | 'rating' | 'totalDeliveries' | 'currentLatitude' | 'currentLongitude'>) => Promise<boolean>;
   onUpdateDriver?: (driverId: string, driverData: Omit<Driver, '_id' | 'createdAt' | 'updatedAt' | 'totalDeliveries' | 'currentLatitude' | 'currentLongitude'>) => Promise<boolean>;
@@ -18,9 +19,10 @@ interface NewDriverRow {
   areaCoverage: string;
 }
 
-export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }: DriversGridProps) {
+export function DriversGrid({ drivers, orders = [], loading, onCreateDriver, onUpdateDriver }: DriversGridProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<Partial<Driver>>({});
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [showNewRow, setShowNewRow] = useState(false);
   const [newDriver, setNewDriver] = useState<NewDriverRow>({
     name: '',
@@ -155,8 +157,94 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
     );
   }
 
+  // Get orders for selected driver
+  const selectedDriver = selectedDriverId ? drivers.find(d => d._id === selectedDriverId) : null;
+  const driverOrders = selectedDriverId 
+    ? orders.filter(order => order.driverId === selectedDriverId)
+    : [];
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Pending': return 'bg-yellow-100 text-yellow-800';
+      case 'On Way': return 'bg-blue-100 text-blue-800';
+      case 'Delivered': return 'bg-green-100 text-green-800';
+      case 'No Answer': return 'bg-purple-100 text-purple-800';
+      case 'Cancelled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const downloadDriverOrders = (driver: Driver, orders: Delivery[]) => {
+    // Define CSV headers
+    const headers = [
+      'Order ID',
+      'Customer Name',
+      'Phone',
+      'Address',
+      'City',
+      'Product',
+      'Price (AED)',
+      'Status',
+      'Delivery Option',
+      'Priority',
+      'Notes',
+      'Latitude',
+      'Longitude',
+      'Created At'
+    ];
+
+    // Map orders to CSV rows
+    const rows = orders.map(order => [
+      order._id,
+      order.customerName,
+      order.customerPhone,
+      order.customerAddress || '',
+      order.customerCity || '',
+      order.product ? (order.product.title || order.product.name) : '',
+      (order.orderValue || (order.product?.raw as any)?.price || 0).toFixed(2),
+      order.status,
+      order.deliveryTime === 'today' ? 'Today' :
+        order.deliveryTime === 'tomorrow' ? 'Tomorrow' :
+        order.deliveryTime === '2-days' ? '2 Days After' :
+        order.deliveryTime || '',
+      order.priority,
+      order.notes || '',
+      order.latitude || '',
+      order.longitude || '',
+      new Date(order.createdAt).toLocaleString()
+    ]);
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => {
+        // Escape cells that contain commas, quotes, or newlines
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${driver.name}_orders_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-sm border">
+    <div className="flex gap-6">
+      {/* Drivers Table */}
+      <div className={`bg-white rounded-lg shadow-sm border ${selectedDriverId ? 'w-1/2' : 'w-full'} transition-all duration-300`}>
       <div className="p-6 border-b border-gray-200">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-800">Drivers</h3>
@@ -182,6 +270,9 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
                 Name
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total Orders
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Phone
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -202,6 +293,7 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Rating
               </th>
+              
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -211,8 +303,17 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
             {/* Existing drivers */}
             {drivers.map((driver) => {
               const isEditing = editingId === driver._id;
+              const isSelected = selectedDriverId === driver._id;
               return (
-                <tr key={driver._id} className={`${isEditing ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                <tr 
+                  key={driver._id} 
+                  className={`cursor-pointer transition-colors ${
+                    isSelected ? 'bg-blue-100 border-l-4 border-l-blue-500' : 
+                    isEditing ? 'bg-blue-50' : 
+                    'hover:bg-gray-50'
+                  }`}
+                  onClick={() => !isEditing && setSelectedDriverId(driver._id)}
+                >
                   {/* Name */}
                   <td className="px-4 py-3">
                     {isEditing ? (
@@ -228,6 +329,13 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
                     ) : (
                       <div className="text-sm font-medium text-gray-900">{driver.name}</div>
                     )}
+                  </td>
+
+                  {/* Total Orders */}
+                  <td className="px-4 py-3">
+                    <div className="text-sm font-semibold text-gray-900">
+                      {orders.filter(order => order.driverId === driver._id).length}
+                    </div>
                   </td>
 
                   {/* Phone */}
@@ -369,6 +477,8 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
                     )}
                   </td>
 
+                  
+
                   {/* Actions */}
                   <td className="px-4 py-3 text-right">
                     {isEditing ? (
@@ -479,6 +589,9 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
                 <td className="px-4 py-3 text-center text-gray-400 text-sm">
                   New
                 </td>
+                <td className="px-4 py-3 text-center text-gray-400 text-sm">
+                  0
+                </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <button
@@ -505,7 +618,7 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
             {/* Empty state */}
             {drivers.length === 0 && !showNewRow && (
               <tr>
-                <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={10} className="px-6 py-8 text-center text-gray-500">
                   No drivers found. Click "Add New Row" to create your first driver.
                 </td>
               </tr>
@@ -513,6 +626,120 @@ export function DriversGrid({ drivers, loading, onCreateDriver, onUpdateDriver }
           </tbody>
         </table>
       </div>
+    </div>
+
+      {/* Driver Orders Table - Shows when a driver is selected */}
+      {selectedDriverId && selectedDriver && (
+        <div className="w-1/2 bg-white rounded-lg shadow-sm border">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">{selectedDriver.name}'s Orders</h3>
+                <p className="text-sm text-gray-500 mt-1">{driverOrders.length} total orders</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {driverOrders.length > 0 && (
+                  <button
+                    onClick={() => downloadDriverOrders(selectedDriver, driverOrders)}
+                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    title="Download orders as CSV"
+                  >
+                    <Download size={16} /> Download CSV
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedDriverId(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Customer
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Product
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Delivery
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Price
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {driverOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                      No orders assigned to this driver yet.
+                    </td>
+                  </tr>
+                ) : (
+                  driverOrders.map((order) => (
+                    <tr key={order._id} className="hover:bg-gray-50">
+                      {/* Customer */}
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-gray-900">{order.customerName}</div>
+                        <div className="text-xs text-gray-500">{order.customerPhone}</div>
+                        <div className="text-xs text-gray-500 mt-1">{order.customerAddress}</div>
+                      </td>
+                      
+                      {/* Product */}
+                      <td className="px-4 py-3">
+                        <div className="text-sm text-gray-900">
+                          {order.product ? (order.product.title || order.product.name) : 'N/A'}
+                        </div>
+                      </td>
+                      
+                      {/* Status */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                          {order.status}
+                        </span>
+                      </td>
+                      
+                      {/* Delivery Time */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          order.deliveryTime === 'today' ? 'bg-red-100 text-red-800' :
+                          order.deliveryTime === 'tomorrow' ? 'bg-yellow-100 text-yellow-800' :
+                          order.deliveryTime === '2-days' ? 'bg-green-100 text-green-800' :
+                          order.deliveryTime ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {order.deliveryTime === 'today' ? 'Today' :
+                           order.deliveryTime === 'tomorrow' ? 'Tomorrow' :
+                           order.deliveryTime === '2-days' ? '2 Days' :
+                           order.deliveryTime || 'Not Set'}
+                        </span>
+                      </td>
+                      
+                      {/* Price */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          AED {(order.orderValue || (order.product?.raw as any)?.price || 0).toFixed(2)}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
