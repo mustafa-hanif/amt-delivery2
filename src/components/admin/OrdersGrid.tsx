@@ -342,7 +342,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     document.body.removeChild(link);
   };
 
-  const handleLocationPaste = (e: React.ClipboardEvent, isEditing: boolean) => {
+  const handleLocationPaste = (e: React.ClipboardEvent) => {
     const pastedText = e.clipboardData.getData('text');
     
     // Check if it looks like a Google Maps URL
@@ -351,11 +351,32 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       const location = extractLocationFromUrl(pastedText);
       
       if (location.latitude && location.longitude) {
+        const coordsText = `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
+        
         setEditingData(prev => ({
           ...prev,
           latitude: location.latitude,
           longitude: location.longitude,
         }));
+        
+        // Show coordinates immediately in the input field
+        const target = e.target as HTMLInputElement;
+        target.value = coordsText;
+        target.classList.add('bg-green-50', 'border-green-500', 'text-green-700', 'font-medium');
+        
+        setTimeout(() => {
+          target.classList.remove('bg-green-50', 'border-green-500', 'text-green-700', 'font-medium');
+        }, 2000);
+      } else {
+        // Show error feedback
+        const target = e.target as HTMLInputElement;
+        target.value = '✗ Could not extract location from URL';
+        target.classList.add('bg-red-50', 'border-red-500', 'text-red-700');
+        
+        setTimeout(() => {
+          target.value = '';
+          target.classList.remove('bg-red-50', 'border-red-500', 'text-red-700');
+        }, 2000);
       }
     }
   };
@@ -726,7 +747,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                     )}
                   </td>
                   {/* Delivery Option */}
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4">
                     {editingId === order._id ? (
                       <div className="flex flex-col gap-1">
                         <select
@@ -771,8 +792,8 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                       <input
                         type="text"
                         placeholder="Paste Google Maps URL"
-                        onPaste={(e) => handleLocationPaste(e, true)}
-                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        onPaste={handleLocationPaste}
+                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
                       />
                     ) : (
                       <div className="text-xs text-gray-500">
