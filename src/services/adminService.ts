@@ -167,7 +167,7 @@ export class AdminService {
   async updateOrder(id: string, orderData: {
     status: 'Pending' | 'On Way' | 'Delivered' | 'No Answer' | 'Cancelled';
     priority: 'low' | 'medium' | 'high' | 'urgent';
-    deliveryTime?: 'today' | 'tomorrow' | '2-days';
+    deliveryTime?: string;
     notes?: string;
     productId?: string;
     driverId?: string;
@@ -198,7 +198,7 @@ export class AdminService {
     customerId: string;
     productId: string;
     priority: 'low' | 'medium' | 'high' | 'urgent';
-    deliveryTime?: 'today' | 'tomorrow' | '2-days';
+    deliveryTime?: string;
     notes?: string;
     latitude?: number;
     longitude?: number;

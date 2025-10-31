@@ -8,6 +8,16 @@ interface DriversGridProps {
   loading?: boolean;
   onCreateDriver?: (driverData: Omit<Driver, '_id' | 'createdAt' | 'updatedAt' | 'isActive' | 'rating' | 'totalDeliveries' | 'currentLatitude' | 'currentLongitude'>) => Promise<boolean>;
   onUpdateDriver?: (driverId: string, driverData: Omit<Driver, '_id' | 'createdAt' | 'updatedAt' | 'totalDeliveries' | 'currentLatitude' | 'currentLongitude'>) => Promise<boolean>;
+  onUpdateOrder?: (orderId: string, orderData: {
+    status: 'Pending' | 'On Way' | 'Delivered' | 'No Answer' | 'Cancelled';
+    priority: 'low' | 'medium' | 'high' | 'urgent';
+    deliveryTime?: string;
+    notes?: string;
+    productId?: string;
+    driverId?: string;
+    latitude?: number;
+    longitude?: number;
+  }) => Promise<boolean>;
 }
 
 interface NewDriverRow {
@@ -19,10 +29,11 @@ interface NewDriverRow {
   areaCoverage: string;
 }
 
-export function DriversGrid({ drivers, orders = [], loading, onCreateDriver, onUpdateDriver }: DriversGridProps) {
+export function DriversGrid({ drivers, orders = [], loading, onCreateDriver, onUpdateDriver, onUpdateOrder }: DriversGridProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<Partial<Driver>>({});
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [showNewRow, setShowNewRow] = useState(false);
   const [newDriver, setNewDriver] = useState<NewDriverRow>({
     name: '',
@@ -171,6 +182,27 @@ export function DriversGrid({ drivers, orders = [], loading, onCreateDriver, onU
       case 'No Answer': return 'bg-purple-100 text-purple-800';
       case 'Cancelled': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const handleOrderStatusChange = async (orderId: string, newStatus: Delivery['status'], order: Delivery) => {
+    if (!onUpdateOrder) return;
+    
+    const success = await onUpdateOrder(orderId, {
+      status: newStatus,
+      priority: order.priority,
+      deliveryTime: order.deliveryTime,
+      notes: order.notes,
+      productId: order.productId,
+      driverId: order.driverId,
+      latitude: order.latitude,
+      longitude: order.longitude,
+    });
+
+    if (success) {
+      setEditingOrderId(null);
+    } else {
+      alert('Failed to update order status. Please try again.');
     }
   };
 
@@ -705,9 +737,29 @@ export function DriversGrid({ drivers, orders = [], loading, onCreateDriver, onU
                       
                       {/* Status */}
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                          {order.status}
-                        </span>
+                        {editingOrderId === order._id ? (
+                          <select
+                            value={order.status}
+                            onChange={(e) => handleOrderStatusChange(order._id, e.target.value as Delivery['status'], order)}
+                            className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            autoFocus
+                            onBlur={() => setEditingOrderId(null)}
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="On Way">On Way</option>
+                            <option value="Delivered">Delivered</option>
+                            <option value="No Answer">No Answer</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+                        ) : (
+                          <span 
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 ${getStatusColor(order.status)}`}
+                            onClick={() => setEditingOrderId(order._id)}
+                            title="Click to change status"
+                          >
+                            {order.status}
+                          </span>
+                        )}
                       </td>
                       
                       {/* Delivery Time */}

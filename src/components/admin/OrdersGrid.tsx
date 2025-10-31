@@ -67,6 +67,8 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
   const [saving, setSaving] = useState(false);
   const [showMagicBox, setShowMagicBox] = useState(false);
   const [magicBoxData, setMagicBoxData] = useState('');
+  const [showNewRow, setShowNewRow] = useState(false);
+  const [newOrder, setNewOrder] = useState<Partial<Delivery>>({});
   const [parsedOrders, setParsedOrders] = useState<Array<{
     customerName: string;
     customerPhone: string;
@@ -434,6 +436,76 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     }
   };
 
+  const handleAddNewOrder = async () => {
+    if (!onCreateOrder || !newOrder.customerId || !newOrder.productId) {
+      alert('Please select both customer and product');
+      return;
+    }
+
+    setSaving(true);
+    
+    // Find the selected customer and product to get their full data
+    const selectedCustomer = customers.find(c => c._id === newOrder.customerId);
+    const selectedProduct = products.find(p => p._id === newOrder.productId);
+    
+    if (!selectedCustomer || !selectedProduct) {
+      alert('Invalid customer or product selection');
+      setSaving(false);
+      return;
+    }
+
+    // Create the order in the backend
+    const orderId = await onCreateOrder({
+      customerId: newOrder.customerId,
+      productId: newOrder.productId,
+      priority: (newOrder.priority as 'low' | 'medium' | 'high' | 'urgent') || 'low',
+      deliveryTime: newOrder.deliveryTime,
+      notes: newOrder.notes,
+      latitude: newOrder.latitude,
+      longitude: newOrder.longitude,
+    });
+
+    if (orderId) {
+      // Optimistically add the new order to local state
+      const newDelivery: Delivery = {
+        _id: orderId.toString(), // Use the returned ID
+        customerId: selectedCustomer._id,
+        productId: selectedProduct._id,
+        customerName: selectedCustomer.name,
+        customerPhone: selectedCustomer.phone,
+        customerAddress: selectedCustomer.address || '',
+        customerCity: selectedCustomer.city,
+        customerCountry: selectedCustomer.country,
+        latitude: selectedCustomer.latitude || 0,
+        longitude: selectedCustomer.longitude || 0,
+        status: 'Pending',
+        priority: (newOrder.priority as 'low' | 'medium' | 'high' | 'urgent') || 'low',
+        deliveryTime: newOrder.deliveryTime,
+        notes: newOrder.notes,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        product: {
+          id: selectedProduct._id,
+          title: selectedProduct.title,
+          name: selectedProduct.title,
+        },
+        customerRecord: {
+          id: selectedCustomer._id,
+          name: selectedCustomer.name,
+        },
+      };
+
+      // Add to local orders without triggering a full reload
+      setLocalOrders(prevOrders => [newDelivery, ...prevOrders]);
+      
+      setShowNewRow(false);
+      setNewOrder({});
+    } else {
+      alert('Failed to create order. Please try again.');
+    }
+    setSaving(false);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending': return 'bg-yellow-100 text-yellow-800';
@@ -487,6 +559,12 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
               title="Download orders as CSV"
             >
               <Download size={18} /> Download CSV
+            </button>
+            <button
+              onClick={() => setShowNewRow(!showNewRow)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              <Plus size={18} /> Add New Order
             </button>
             <button
               onClick={() => setShowMagicBox(!showMagicBox)}
@@ -625,6 +703,107 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
+            {/* New Order Row */}
+            {showNewRow && (
+              <tr className="bg-green-50 border-2 border-green-500">
+                {/* Customer */}
+                <td className="px-6 py-4">
+                  <select
+                    value={newOrder.customerId || ''}
+                    onChange={(e) => setNewOrder({ ...newOrder, customerId: e.target.value })}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Select Customer</option>
+                    {customers.map(customer => (
+                      <option key={customer._id} value={customer._id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                {/* Address - Empty */}
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-400">-</div>
+                </td>
+                {/* City - Empty */}
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-400">-</div>
+                </td>
+                {/* Mobile - Empty */}
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-400">-</div>
+                </td>
+                {/* Product */}
+                <td className="px-6 py-4">
+                  <select
+                    value={newOrder.productId || ''}
+                    onChange={(e) => setNewOrder({ ...newOrder, productId: e.target.value })}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Select Product</option>
+                    {products.filter(p => p.inStock).map(product => (
+                      <option key={product._id} value={product._id}>
+                        {product.title} - AED {product.price.toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                {/* Price - Empty */}
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-400">-</div>
+                </td>
+                {/* Agent Name - Empty */}
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-400">-</div>
+                </td>
+                {/* Driver - Empty for now */}
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-400">-</div>
+                </td>
+                {/* Delivery Option */}
+                <td className="px-6 py-4">
+                  <input
+                    type="text"
+                    value={newOrder.deliveryTime || ''}
+                    onChange={(e) => setNewOrder({ ...newOrder, deliveryTime: e.target.value })}
+                    placeholder="Enter delivery time"
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </td>
+                {/* Location - Empty */}
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-400">-</div>
+                </td>
+                {/* Status - Empty */}
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-400">Pending</div>
+                </td>
+                {/* Actions */}
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={handleAddNewOrder}
+                      disabled={saving}
+                      className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                      title="Save new order"
+                    >
+                      <Check size={18} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowNewRow(false);
+                        setNewOrder({});
+                      }}
+                      className="text-gray-600 hover:text-gray-800"
+                      title="Cancel"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )}
+
             {localOrders.length === 0 ? (
               <tr>
                 <td colSpan={11} className="px-6 py-4 text-center text-gray-500">

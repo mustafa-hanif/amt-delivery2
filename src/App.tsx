@@ -35,6 +35,7 @@ export function App() {
   const handleLogin = async (password: string, role: 'admin' | 'driver', driverId?: string) => {
     // Simple password check - in production, this should be server-side
     let isValid = false;
+    let actualDriverId: string | undefined = undefined;
     
     if (role === 'admin') {
       // Admin password check
@@ -47,6 +48,7 @@ export function App() {
         
         if (driver && driver.password === password) {
           isValid = true;
+          actualDriverId = driver._id; // Use the actual driver ID, not phone
         }
       }
     }
@@ -55,7 +57,7 @@ export function App() {
       const newAuthState: AuthState = {
         isAuthenticated: true,
         role,
-        driverId: role === 'driver' ? driverId : undefined,
+        driverId: role === 'driver' ? actualDriverId : undefined,
       };
       setAuthState(newAuthState);
       localStorage.setItem('authState', JSON.stringify(newAuthState));

@@ -25,7 +25,7 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
     if (driverLocation !== null || locationPermission === false) {
       loadDeliveries();
     }
-  }, [driverLocation, filter]);
+  }, [driverLocation, filter, driverId]);
 
   const requestLocationPermission = async () => {
     try {
@@ -48,11 +48,19 @@ export function DeliveryList({ driverId }: DeliveryListProps) {
       setError(null);
 
       console.log('🔄 Loading deliveries... driverLocation:', driverLocation);
+      console.log('👤 Driver ID:', driverId);
 
   // Get deliveries from Convex
   const statusFilter = filter === 'all' ? undefined : filter;
-      const deliveriesData = await deliveryService.getDeliveries(statusFilter);
+      let deliveriesData = await deliveryService.getDeliveries(statusFilter);
       console.log('📥 Received deliveries from backend:', deliveriesData.length, 'orders');
+
+      // Filter deliveries by driver if driverId is provided (driver view)
+      if (driverId) {
+        console.log('🔍 Filtering deliveries for driver:', driverId);
+        deliveriesData = deliveriesData.filter(delivery => delivery.driverId === driverId);
+        console.log('✅ Filtered to', deliveriesData.length, 'orders for this driver');
+      }
 
       if (driverLocation) {
         console.log('✅ Driver location available, calculating distances...');

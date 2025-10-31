@@ -345,6 +345,13 @@ export function AdminDashboard() {
               }
               return success;
             }}
+            onUpdateOrder={async (orderId, orderData) => {
+              const success = await adminService.updateOrder(orderId, orderData);
+              if (success) {
+                await loadData(); // Refresh data to update order status
+              }
+              return success;
+            }}
           />
         )}
 
@@ -362,9 +369,7 @@ export function AdminDashboard() {
             }}
             onCreateOrder={async (orderData) => {
               const success = await adminService.createOrder(orderData);
-              if (success) {
-                await loadData(); // Refresh data
-              }
+              // OrdersGrid handles optimistic updates, no need to reload
               return success;
             }}
             onDeleteOrder={async (orderId) => {
