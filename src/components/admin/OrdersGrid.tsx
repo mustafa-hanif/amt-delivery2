@@ -268,6 +268,13 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
   };
 
   const downloadOrdersCSV = () => {
+    // Sort orders by creation time (latest first)
+    const sortedOrders = [...localOrders].sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA;
+    });
+
     // Define CSV headers
     const headers = [
       'Order ID',
@@ -437,73 +444,120 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
   };
 
   const handleAddNewOrder = async () => {
-    if (!onCreateOrder || !newOrder.customerId || !newOrder.productId) {
-      alert('Please select both customer and product');
+    if (!onCreateOrder || !onCreateCustomer) {
+      alert('Missing required functions');
+      return;
+    }
+
+    // Validate required fields
+    if (!newOrder.customerName || !newOrder.customerPhone || !newOrder.productId) {
+      alert('Please fill in customer name, phone, and select a product');
       return;
     }
 
     setSaving(true);
     
-    // Find the selected customer and product to get their full data
-    const selectedCustomer = customers.find(c => c._id === newOrder.customerId);
-    const selectedProduct = products.find(p => p._id === newOrder.productId);
-    
-    if (!selectedCustomer || !selectedProduct) {
-      alert('Invalid customer or product selection');
-      setSaving(false);
-      return;
-    }
+    try {
+      // Check if customer exists by phone number
+      let existingCustomer = customers.find(c => c.phone === newOrder.customerPhone);
+      let customerId: string;
 
-    // Create the order in the backend
-    const orderId = await onCreateOrder({
-      customerId: newOrder.customerId,
-      productId: newOrder.productId,
-      priority: (newOrder.priority as 'low' | 'medium' | 'high' | 'urgent') || 'low',
-      deliveryTime: newOrder.deliveryTime,
-      notes: newOrder.notes,
-      latitude: newOrder.latitude,
-      longitude: newOrder.longitude,
-    });
+      if (existingCustomer) {
+        // Use existing customer
+        customerId = existingCustomer._id;
+      } else {
+        // Create new customer
+        const newCustomerId = await onCreateCustomer({
+          name: newOrder.customerName,
+          phone: newOrder.customerPhone,
+          address: newOrder.customerAddress || '',
+          city: newOrder.customerCity || '',
+          country: newOrder.customerCountry || '',
+        });
 
-    if (orderId) {
-      // Optimistically add the new order to local state
-      const newDelivery: Delivery = {
-        _id: orderId.toString(), // Use the returned ID
-        customerId: selectedCustomer._id,
-        productId: selectedProduct._id,
-        customerName: selectedCustomer.name,
-        customerPhone: selectedCustomer.phone,
-        customerAddress: selectedCustomer.address || '',
-        customerCity: selectedCustomer.city,
-        customerCountry: selectedCustomer.country,
-        latitude: selectedCustomer.latitude || 0,
-        longitude: selectedCustomer.longitude || 0,
-        status: 'Pending',
+        if (!newCustomerId) {
+          alert('Failed to create customer. Please try again.');
+          setSaving(false);
+          return;
+        }
+
+        customerId = newCustomerId;
+        existingCustomer = {
+          _id: newCustomerId,
+          name: newOrder.customerName,
+          phone: newOrder.customerPhone,
+          address: newOrder.customerAddress || '',
+          city: newOrder.customerCity,
+          country: newOrder.customerCountry,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      // Find the selected product
+      const selectedProduct = products.find(p => p._id === newOrder.productId);
+      
+      if (!selectedProduct) {
+        alert('Invalid product selection');
+        setSaving(false);
+        return;
+      }
+
+      // Create the order in the backend
+      const orderId = await onCreateOrder({
+        customerId: customerId,
+        productId: newOrder.productId,
         priority: (newOrder.priority as 'low' | 'medium' | 'high' | 'urgent') || 'low',
         deliveryTime: newOrder.deliveryTime,
         notes: newOrder.notes,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        product: {
-          id: selectedProduct._id,
-          title: selectedProduct.title,
-          name: selectedProduct.title,
-        },
-        customerRecord: {
-          id: selectedCustomer._id,
-          name: selectedCustomer.name,
-        },
-      };
+        latitude: newOrder.latitude,
+        longitude: newOrder.longitude,
+      });
 
-      // Add to local orders without triggering a full reload
-      setLocalOrders(prevOrders => [newDelivery, ...prevOrders]);
-      
-      setShowNewRow(false);
-      setNewOrder({});
-    } else {
-      alert('Failed to create order. Please try again.');
+      if (orderId) {
+        // Optimistically add the new order to local state
+        const newDelivery: Delivery = {
+          _id: orderId.toString(), // Use the returned ID
+          customerId: customerId,
+          productId: selectedProduct._id,
+          customerName: existingCustomer.name,
+          customerPhone: existingCustomer.phone,
+          customerAddress: existingCustomer.address || '',
+          customerCity: existingCustomer.city,
+          customerCountry: existingCustomer.country,
+          latitude: existingCustomer.latitude || 0,
+          longitude: existingCustomer.longitude || 0,
+          status: 'Pending',
+          priority: (newOrder.priority as 'low' | 'medium' | 'high' | 'urgent') || 'low',
+          deliveryTime: newOrder.deliveryTime,
+          notes: newOrder.notes,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          product: {
+            id: selectedProduct._id,
+            title: selectedProduct.title,
+            name: selectedProduct.title,
+          },
+          customerRecord: {
+            id: existingCustomer._id,
+            name: existingCustomer.name,
+          },
+        };
+
+        // Add to local orders without triggering a full reload
+        setLocalOrders(prevOrders => [newDelivery, ...prevOrders]);
+        
+        setShowNewRow(false);
+        setNewOrder({});
+      } else {
+        alert('Failed to create order. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error creating order:', error);
+      alert('An error occurred while creating the order.');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const getStatusColor = (status: string) => {
@@ -706,32 +760,45 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
             {/* New Order Row */}
             {showNewRow && (
               <tr className="bg-green-50 border-2 border-green-500">
-                {/* Customer */}
+                {/* Customer Name */}
                 <td className="px-6 py-4">
-                  <select
-                    value={newOrder.customerId || ''}
-                    onChange={(e) => setNewOrder({ ...newOrder, customerId: e.target.value })}
+                  <input
+                    type="text"
+                    value={newOrder.customerName || ''}
+                    onChange={(e) => setNewOrder({ ...newOrder, customerName: e.target.value })}
+                    placeholder="Enter customer name"
                     className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Select Customer</option>
-                    {customers.map(customer => (
-                      <option key={customer._id} value={customer._id}>
-                        {customer.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </td>
-                {/* Address - Empty */}
+                {/* Address */}
                 <td className="px-6 py-4">
-                  <div className="text-sm text-gray-400">-</div>
+                  <input
+                    type="text"
+                    value={newOrder.customerAddress || ''}
+                    onChange={(e) => setNewOrder({ ...newOrder, customerAddress: e.target.value })}
+                    placeholder="Enter address"
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
                 </td>
-                {/* City - Empty */}
+                {/* City */}
                 <td className="px-6 py-4">
-                  <div className="text-sm text-gray-400">-</div>
+                  <input
+                    type="text"
+                    value={newOrder.customerCity || ''}
+                    onChange={(e) => setNewOrder({ ...newOrder, customerCity: e.target.value })}
+                    placeholder="Enter city"
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
                 </td>
-                {/* Mobile - Empty */}
+                {/* Mobile */}
                 <td className="px-6 py-4">
-                  <div className="text-sm text-gray-400">-</div>
+                  <input
+                    type="tel"
+                    value={newOrder.customerPhone || ''}
+                    onChange={(e) => setNewOrder({ ...newOrder, customerPhone: e.target.value })}
+                    placeholder="Enter mobile number"
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
                 </td>
                 {/* Product */}
                 <td className="px-6 py-4">
