@@ -307,17 +307,24 @@ export function AdminDashboard() {
 
         {activeTab === 'products' && (
           <ProductsGrid 
-            products={products} 
+            products={products}
             loading={loading}
             onCreateProduct={async (productData) => {
-              const success = await adminService.createProduct(productData);
+              const productId = await adminService.createProduct(productData);
+              if (productId) {
+                await loadData(); // Refresh data
+              }
+              return productId;
+            }}
+            onUpdateProduct={async (productId, productData) => {
+              const success = await adminService.updateProduct(productId, productData);
               if (success) {
                 await loadData(); // Refresh data
               }
               return success;
             }}
-            onUpdateProduct={async (productId, productData) => {
-              const success = await adminService.updateProduct(productId, productData);
+            onDeleteProduct={async (productId) => {
+              const success = await adminService.deleteProduct(productId);
               if (success) {
                 await loadData(); // Refresh data
               }
@@ -380,18 +387,20 @@ export function AdminDashboard() {
               return success;
             }}
             onCreateCustomer={async (customerData) => {
-              const success = await adminService.createCustomer(customerData);
-              if (success) {
-                await loadData(); // Refresh data
-              }
-              return success;
+              const customerId = await adminService.createCustomer(customerData);
+              // OrdersGrid handles optimistic updates, no need to reload
+              return customerId;
             }}
             onCreateProduct={async (productData) => {
-              const success = await adminService.createProduct(productData);
-              if (success) {
-                await loadData(); // Refresh data
-              }
-              return success;
+              const productId = await adminService.createProduct(productData);
+              // OrdersGrid handles optimistic updates, no need to reload
+              return productId;
+            }}
+            onMagicBoxComplete={async () => {
+              // Wait a bit for database to commit, then reload all data
+              setTimeout(async () => {
+                await loadData();
+              }, 500);
             }}
           />
         )}

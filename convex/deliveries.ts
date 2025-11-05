@@ -17,12 +17,6 @@ export const list = query({
   handler: async (ctx: QueryCtx, args: { status?: "Pending" | "On Way" | "Delivered" | "No Answer" | "Cancelled" }) => {
     const deliveries = await ctx.db.query("deliveries").collect();
     
-    // Debug: Log coordinates
-    console.log('🗄️ Database deliveries:');
-    deliveries.forEach((d: any) => {
-      console.log(`  - ${d.customerName}: lat=${d.latitude}, lng=${d.longitude}`);
-    });
-    
     // Populate related records (driver, product, customer)
     const populatedDeliveries = await Promise.all(
       deliveries.map(async (delivery: any) => {

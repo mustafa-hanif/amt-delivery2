@@ -140,12 +140,10 @@ export function DeliveryCard({ delivery, onStatusUpdate, onDeliveryTimeUpdate }:
         </div>
       </div>
 
-      {delivery.notes && (
-        <p className="text-sm text-gray-700 mb-3 italic">"{delivery.notes}"</p>
-      )}
+      <div className='bg-blue-100 py-1 rounded-2xl mb-2 mx-[120px]'>{delivery.product?.name}</div>
 
       {/* Delivery Time Selector */}
-      <div className="mb-3 ">
+      <div className="text-left mb-3 ">
         <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Time</label>
         <select
           value={delivery.deliveryTime || ''}
@@ -160,11 +158,11 @@ export function DeliveryCard({ delivery, onStatusUpdate, onDeliveryTimeUpdate }:
         </select>
       </div>
 
-      {delivery.orderValue && (
+      {delivery.orderValue ? (
         <p className="text-sm font-medium text-gray-800 mb-3 flex items-center gap-1">
           Order Value: AED {delivery.orderValue.toFixed(2)}
         </p>
-      )}
+      ) : null}
 
       <div className="flex gap-2 mb-3">
         <button

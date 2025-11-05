@@ -58,17 +58,18 @@ interface OrdersGridProps {
   onAssignDriver?: (order: Delivery) => void;
   onCreateCustomer?: (customerData: Omit<Customer, '_id' | 'createdAt' | 'updatedAt' | 'totalOrders'>) => Promise<string | null>;
   onCreateProduct?: (productData: Omit<Product, '_id' | 'createdAt' | 'updatedAt'>) => Promise<string | null>;
+  onMagicBoxComplete?: () => void;
 }
 
-export function OrdersGrid({ orders, customers, products, drivers, loading, onUpdateOrder, onCreateOrder, onDeleteOrder, onAssignDriver, onCreateCustomer, onCreateProduct }: OrdersGridProps) {
+export function OrdersGrid({ orders, customers, products, drivers, loading, onUpdateOrder, onCreateOrder, onDeleteOrder, onAssignDriver, onCreateCustomer, onCreateProduct, onMagicBoxComplete }: OrdersGridProps) {
   const [localOrders, setLocalOrders] = useState<Delivery[]>(orders);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingData, setEditingData] = useState<Partial<Delivery>>({});
+  const [editingData, setEditingData] = useState<Partial<Delivery> & { productName?: string }>({});
   const [saving, setSaving] = useState(false);
   const [showMagicBox, setShowMagicBox] = useState(false);
   const [magicBoxData, setMagicBoxData] = useState('');
   const [showNewRow, setShowNewRow] = useState(false);
-  const [newOrder, setNewOrder] = useState<Partial<Delivery>>({});
+  const [newOrder, setNewOrder] = useState<Partial<Delivery> & { productName?: string }>({});
   const [parsedOrders, setParsedOrders] = useState<Array<{
     customerName: string;
     customerPhone: string;
@@ -106,14 +107,13 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       city?: string;
       price?: string;
       agent?: string;
-      deliveryOption?: string;
       notes?: string;
     }> = [];
 
     for (const line of lines) {
       if (!line.trim()) continue;
       
-      // Split by tabs - expect 8 columns
+      // Split by tabs - expect 7 columns
       const columns = line.split('\t');
       
       if (columns.length >= 5) {
@@ -124,7 +124,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
         const product = columns[4]?.trim() || '';
         const price = columns[5]?.trim() || '';
         const agent = columns[6]?.trim() || '';
-        const delivery = columns[7]?.trim() || '';
 
         parsed.push({
           customerName: name,
@@ -134,8 +133,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
           city: city,
           price: price,
           agent: agent,
-          deliveryOption: delivery,
-          notes: `${address}${city ? ', ' + city : ''} | Price: ${price} | Agent: ${agent} | Delivery: ${delivery}`
+          notes: `${address}${city ? ', ' + city : ''} | Price: ${price} | Agent: ${agent}`
         });
       }
     }
@@ -221,29 +219,10 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       }
 
       if (customer && product) {
-        // Map delivery option to delivery time
-        let deliveryTime: string | undefined;
-        if (order.deliveryOption) {
-          const deliveryLower = order.deliveryOption.toLowerCase();
-          if (deliveryLower.includes('today') || deliveryLower.includes('express') || deliveryLower.includes('same day')) {
-            deliveryTime = 'today';
-          } else if (deliveryLower.includes('tomorrow') || deliveryLower.includes('next day')) {
-            deliveryTime = 'tomorrow';
-          } else if (deliveryLower.includes('2') || deliveryLower.includes('two') || deliveryLower.includes('2-day')) {
-            deliveryTime = '2-days';
-          } else {
-            // Use the custom delivery option value directly
-            deliveryTime = order.deliveryOption;
-          }
-        }
-        
-        console.log(`📦 Creating order for ${order.customerName} with deliveryTime:`, deliveryTime);
-        
         const success = await onCreateOrder({
           customerId: customer._id,
           productId: product._id,
           priority: 'medium',
-          deliveryTime: deliveryTime,
           notes: order.notes,
           latitude: undefined,
           longitude: undefined,
@@ -265,6 +244,11 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     ].filter(Boolean).join('\n');
     
     alert(message);
+    
+    // Reload data to show the new orders with full product information
+    if (onMagicBoxComplete) {
+      onMagicBoxComplete();
+    }
   };
 
   const downloadOrdersCSV = () => {
@@ -286,7 +270,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       'Price (AED)',
       'Agent Name',
       'Driver',
-      'Delivery Option',
       'Status',
       'Priority',
       'Notes',
@@ -395,34 +378,67 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     
     setSaving(true);
     
-    // Optimistically update the local state
-    setLocalOrders(prevOrders => 
-      prevOrders.map(order => 
-        order._id === editingId 
-          ? { ...order, ...editingData } 
-          : order
-      )
-    );
-    
-    const success = await onUpdateOrder(editingId, {
-      status: editingData.status!,
-      priority: editingData.priority!,
-      deliveryTime: editingData.deliveryTime,
-      notes: editingData.notes,
-      productId: editingData.productId,
-      driverId: editingData.driverId,
-      latitude: editingData.latitude,
-      longitude: editingData.longitude,
-    });
+    try {
+      let productIdToUse = editingData.productId;
+      
+      // If product name was changed, find or create the product
+      if (editingData.productName && onCreateProduct) {
+        // Try to find existing product
+        let product = products.find(p => 
+          p.title.toLowerCase() === editingData.productName!.toLowerCase()
+        );
+        
+        // Create product if not found
+        if (!product) {
+          const newProductId = await onCreateProduct({
+            title: editingData.productName,
+            price: 0,
+            category: 'General',
+            inStock: true,
+            imageUrl: '',
+          });
+          
+          if (newProductId) {
+            productIdToUse = newProductId;
+          }
+        } else {
+          productIdToUse = product._id;
+        }
+      }
+      
+      // Optimistically update the local state
+      setLocalOrders(prevOrders => 
+        prevOrders.map(order => 
+          order._id === editingId 
+            ? { ...order, ...editingData, productId: productIdToUse } 
+            : order
+        )
+      );
+      
+      const success = await onUpdateOrder(editingId, {
+        status: editingData.status!,
+        priority: editingData.priority!,
+        deliveryTime: editingData.deliveryTime,
+        notes: editingData.notes,
+        productId: productIdToUse,
+        driverId: editingData.driverId,
+        latitude: editingData.latitude,
+        longitude: editingData.longitude,
+      });
 
-    if (success) {
-      setEditingId(null);
-      setEditingData({});
-    } else {
-      // Revert on failure
+      if (success) {
+        setEditingId(null);
+        setEditingData({});
+      } else {
+        // Revert on failure
+        setLocalOrders(orders);
+      }
+    } catch (error) {
+      console.error('Error saving edit:', error);
       setLocalOrders(orders);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleDeleteOrder = async (orderId: string, customerName: string) => {
@@ -450,8 +466,8 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
     }
 
     // Validate required fields
-    if (!newOrder.customerName || !newOrder.customerPhone || !newOrder.productId) {
-      alert('Please fill in customer name, phone, and select a product');
+    if (!newOrder.customerPhone || !newOrder.productName) {
+      alert('Please fill in customer phone and product name');
       return;
     }
 
@@ -466,9 +482,10 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
         // Use existing customer
         customerId = existingCustomer._id;
       } else {
-        // Create new customer
+        // Create new customer (use phone as name if no name provided)
+        const customerName = newOrder.customerPhone; // Use phone as default name
         const newCustomerId = await onCreateCustomer({
-          name: newOrder.customerName,
+          name: customerName,
           phone: newOrder.customerPhone,
           address: newOrder.customerAddress || '',
           city: newOrder.customerCity || '',
@@ -484,7 +501,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
         customerId = newCustomerId;
         existingCustomer = {
           _id: newCustomerId,
-          name: newOrder.customerName,
+          name: customerName,
           phone: newOrder.customerPhone,
           address: newOrder.customerAddress || '',
           city: newOrder.customerCity,
@@ -494,11 +511,41 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
         };
       }
 
-      // Find the selected product
-      const selectedProduct = products.find(p => p._id === newOrder.productId);
+      // Find or create product by name
+      let product = products.find(p => 
+        p.title.toLowerCase() === newOrder.productName!.toLowerCase()
+      );
       
-      if (!selectedProduct) {
-        alert('Invalid product selection');
+      if (!product && onCreateProduct) {
+        // Create new product with the entered name
+        const productId = await onCreateProduct({
+          title: newOrder.productName!,
+          price: 0, // Default price, can be updated later
+          category: 'General',
+          inStock: true,
+          imageUrl: '',
+        });
+        
+        if (!productId) {
+          alert('Failed to create product. Please try again.');
+          setSaving(false);
+          return;
+        }
+        
+        product = {
+          _id: productId,
+          title: newOrder.productName!,
+          price: 0,
+          category: 'General',
+          inStock: true,
+          imageUrl: '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      if (!product) {
+        alert('Failed to find or create product.');
         setSaving(false);
         return;
       }
@@ -506,7 +553,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
       // Create the order in the backend
       const orderId = await onCreateOrder({
         customerId: customerId,
-        productId: newOrder.productId,
+        productId: product._id,
         priority: (newOrder.priority as 'low' | 'medium' | 'high' | 'urgent') || 'low',
         deliveryTime: newOrder.deliveryTime,
         notes: newOrder.notes,
@@ -519,7 +566,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
         const newDelivery: Delivery = {
           _id: orderId.toString(), // Use the returned ID
           customerId: customerId,
-          productId: selectedProduct._id,
+          productId: product._id,
           customerName: existingCustomer.name,
           customerPhone: existingCustomer.phone,
           customerAddress: existingCustomer.address || '',
@@ -534,9 +581,9 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           product: {
-            id: selectedProduct._id,
-            title: selectedProduct.title,
-            name: selectedProduct.title,
+            id: product._id,
+            title: product.title,
+            name: product.title,
           },
           customerRecord: {
             id: existingCustomer._id,
@@ -635,13 +682,13 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
             <div className="mb-3">
               <h4 className="font-semibold text-purple-800 mb-1">Bulk Import Orders from Excel</h4>
               <p className="text-sm text-purple-600 mb-1">
-                Paste Excel data with <strong>8 columns</strong> (tab-separated):
+                Paste Excel data with <strong>7 columns</strong> (tab-separated):
               </p>
               <p className="text-xs text-purple-700 font-mono bg-purple-100 px-2 py-1 rounded">
-                Name | Address | City | Mobile | Product | Price | Agent | Delivery Option
+                Name | Address | City | Mobile | Product | Price | Agent
               </p>
               <p className="text-xs text-purple-500 mt-1">
-                Example: YOUNUS | Barwa road Barwa camp | DOHA | 97430837436 | YAMANI KHALTA | 100 | Ahmad | Express
+                Example: YOUNUS | Barwa road Barwa camp | DOHA | 97430837436 | YAMANI KHALTA | 100 | Ahmad
               </p>
             </div>
             
@@ -649,7 +696,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
               value={magicBoxData}
               onChange={(e) => setMagicBoxData(e.target.value)}
               onPaste={handleMagicBoxPaste}
-              placeholder="Paste your Excel data here (tab-separated)...&#10;Format: Name | Address | City | Mobile | Product | Price | Agent | Delivery"
+              placeholder="Paste your Excel data here (tab-separated)...&#10;Format: Name | Address | City | Mobile | Product | Price | Agent"
               className="w-full h-32 p-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
             
@@ -669,20 +716,18 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                         <th className="px-3 py-2 text-left text-purple-800">Product</th>
                         <th className="px-3 py-2 text-left text-purple-800">Price</th>
                         <th className="px-3 py-2 text-left text-purple-800">Agent</th>
-                        <th className="px-3 py-2 text-left text-purple-800">Delivery</th>
                       </tr>
                     </thead>
                     <tbody>
                       {parsedOrders.map((order, idx) => (
                         <tr key={idx} className="border-t border-purple-100">
-                          <td className="px-3 py-2">{order.customerName || '—'}</td>
-                          <td className="px-3 py-2">{order.customerPhone || '—'}</td>
-                          <td className="px-3 py-2">{order.address || '—'}</td>
-                          <td className="px-3 py-2">{order.city || '—'}</td>
-                          <td className="px-3 py-2">{order.productName || '—'}</td>
-                          <td className="px-3 py-2">{order.price || '—'}</td>
-                          <td className="px-3 py-2">{order.agent || '—'}</td>
-                          <td className="px-3 py-2">{order.deliveryOption || '—'}</td>
+                          <td className="px-3 py-2 text-left">{order.customerName || '—'}</td>
+                          <td className="px-3 py-2 text-left">{order.customerPhone || '—'}</td>
+                          <td className="px-3 py-2 text-left">{order.address || '—'}</td>
+                          <td className="px-3 py-2 text-left">{order.city || '—'}</td>
+                          <td className="px-3 py-2 text-left">{order.productName || '—'}</td>
+                          <td className="px-3 py-2 text-left">{order.price || '—'}</td>
+                          <td className="px-3 py-2 text-left">{order.agent || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -743,9 +788,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 Driver
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Delivery Option
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Location
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -760,15 +802,9 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
             {/* New Order Row */}
             {showNewRow && (
               <tr className="bg-green-50 border-2 border-green-500">
-                {/* Customer Name */}
+                {/* Customer Name - Auto-filled from phone */}
                 <td className="px-6 py-4">
-                  <input
-                    type="text"
-                    value={newOrder.customerName || ''}
-                    onChange={(e) => setNewOrder({ ...newOrder, customerName: e.target.value })}
-                    placeholder="Enter customer name"
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
+                  <div className="text-sm text-gray-400 italic">Auto from phone</div>
                 </td>
                 {/* Address */}
                 <td className="px-6 py-4">
@@ -802,18 +838,13 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 </td>
                 {/* Product */}
                 <td className="px-6 py-4">
-                  <select
-                    value={newOrder.productId || ''}
-                    onChange={(e) => setNewOrder({ ...newOrder, productId: e.target.value })}
+                  <input
+                    type="text"
+                    value={newOrder.productName || ''}
+                    onChange={(e) => setNewOrder({ ...newOrder, productName: e.target.value })}
+                    placeholder="Enter product name"
                     className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Select Product</option>
-                    {products.filter(p => p.inStock).map(product => (
-                      <option key={product._id} value={product._id}>
-                        {product.title} - AED {product.price.toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </td>
                 {/* Price - Empty */}
                 <td className="px-6 py-4">
@@ -826,16 +857,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                 {/* Driver - Empty for now */}
                 <td className="px-6 py-4">
                   <div className="text-sm text-gray-400">-</div>
-                </td>
-                {/* Delivery Option */}
-                <td className="px-6 py-4">
-                  <input
-                    type="text"
-                    value={newOrder.deliveryTime || ''}
-                    onChange={(e) => setNewOrder({ ...newOrder, deliveryTime: e.target.value })}
-                    placeholder="Enter delivery time"
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
                 </td>
                 {/* Location - Empty */}
                 <td className="px-6 py-4">
@@ -873,7 +894,7 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
 
             {localOrders.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={10} className="px-6 py-4 text-center text-gray-500">
                   No orders found. Use the 🛒 button in the Customers tab to create orders.
                 </td>
               </tr>
@@ -900,24 +921,25 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                   </td>
                   {/* Product */}
                   <td className="px-6 py-4">
-                    {editingId === order._id ? (
-                      <select
-                        value={editingData.productId || order.productId || ''}
-                        onChange={(e) => setEditingData({ ...editingData, productId: e.target.value })}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="">Select Product</option>
-                        {products.filter(p => p.inStock).map(product => (
-                          <option key={product._id} value={product._id}>
-                            {product.title} - AED {product.price.toFixed(2)}
-                          </option>
-                        ))}
-                      </select>
-                    ) : order.product ? (
-                      <div className="text-sm font-medium text-gray-900">{order.product.title || order.product.name}</div>
-                    ) : (
-                      <span className="text-sm text-gray-400">No product info</span>
-                    )}
+                    {(() => {
+                      if (editingId === order._id) {
+                        return (
+                          <input
+                            type="text"
+                            value={editingData.productName || order.product?.title || order.product?.name || ''}
+                            onChange={(e) => setEditingData({ ...editingData, productName: e.target.value })}
+                            placeholder="Enter product name"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        );
+                      }
+                      
+                      if (order.product && (order.product.title || order.product.name)) {
+                        return <div className="text-sm font-medium text-gray-900">{order.product.title || order.product.name}</div>;
+                      }
+                      console.log({ order });
+                      return <span className="text-sm text-gray-400">No product info</span>;
+                    })()}
                   </td>
                   {/* Price */}
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -990,46 +1012,6 @@ export function OrdersGrid({ orders, customers, products, drivers, loading, onUp
                           </option>
                         ))}
                       </select>
-                    )}
-                  </td>
-                  {/* Delivery Option */}
-                  <td className="px-6 py-4">
-                    {editingId === order._id ? (
-                      <div className="flex flex-col gap-1">
-                        <select
-                          value={editingData.deliveryTime || order.deliveryTime || ''}
-                          onChange={(e) => setEditingData({ ...editingData, deliveryTime: e.target.value })}
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        >
-                          <option value="">Not Set</option>
-                          <option value="today">Today</option>
-                          <option value="tomorrow">Tomorrow</option>
-                          <option value="2-days">2 Days After</option>
-                          {order.deliveryTime && !['', 'today', 'tomorrow', '2-days'].includes(order.deliveryTime) && (
-                            <option value={order.deliveryTime}>{order.deliveryTime}</option>
-                          )}
-                        </select>
-                        <input
-                          type="text"
-                          value={editingData.deliveryTime || order.deliveryTime || ''}
-                          onChange={(e) => setEditingData({ ...editingData, deliveryTime: e.target.value })}
-                          placeholder="Or type custom..."
-                          className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                    ) : (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                        order.deliveryTime === 'today' ? 'bg-red-100 text-red-800' :
-                        order.deliveryTime === 'tomorrow' ? 'bg-yellow-100 text-yellow-800' :
-                        order.deliveryTime === '2-days' ? 'bg-green-100 text-green-800' :
-                        order.deliveryTime ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-600'
-                      }`}>
-                        {order.deliveryTime === 'today' ? 'Today' :
-                         order.deliveryTime === 'tomorrow' ? 'Tomorrow' :
-                         order.deliveryTime === '2-days' ? '2 Days After' :
-                         order.deliveryTime || 'Not Set'}
-                      </span>
                     )}
                   </td>
                   {/* Location */}

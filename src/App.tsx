@@ -131,10 +131,10 @@ export function App() {
       <div className="bg-white shadow-sm border-b hidden md:block">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col items-center gap-4">
               <h1 className="text-xl font-bold text-gray-900">Delivery Management</h1>
               {authState.role === 'driver' && authState.driverId && (
-                <span className="text-sm text-gray-600">
+                <span className="block text-sm text-gray-600">
                   Driver: {authState.driverId}
                 </span>
               )}

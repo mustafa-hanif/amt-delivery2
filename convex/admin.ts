@@ -173,6 +173,14 @@ export const updateProduct = mutation({
   },
 });
 
+export const deleteProduct = mutation({
+  args: { id: v.id("products") },
+  handler: async (ctx: MutationCtx, args) => {
+    await ctx.db.delete(args.id);
+    return true;
+  },
+});
+
 // Driver queries and mutations
 export const listDrivers = query({
   args: {},

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Edit2, X, Check, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Edit2, X, Check, Loader2, CheckCircle, XCircle, Trash2 } from "lucide-react";
 import type { Product } from "../../types";
 
 interface ProductsGridProps {
@@ -7,6 +7,7 @@ interface ProductsGridProps {
   loading?: boolean;
   onCreateProduct?: (productData: Omit<Product, '_id' | 'createdAt' | 'updatedAt'>) => Promise<string | null>;
   onUpdateProduct?: (productId: string, productData: Omit<Product, '_id' | 'createdAt' | 'updatedAt'>) => Promise<boolean>;
+  onDeleteProduct?: (productId: string) => Promise<boolean>;
 }
 
 interface NewProductRow {
@@ -18,7 +19,7 @@ interface NewProductRow {
   imageUrl: string;
 }
 
-export function ProductsGrid({ products, loading, onCreateProduct, onUpdateProduct }: ProductsGridProps) {
+export function ProductsGrid({ products, loading, onCreateProduct, onUpdateProduct, onDeleteProduct }: ProductsGridProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<Partial<Product>>({});
   const [showNewRow, setShowNewRow] = useState(false);
@@ -31,6 +32,7 @@ export function ProductsGrid({ products, loading, onCreateProduct, onUpdateProdu
     imageUrl: ''
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const startEdit = (product: Product) => {
     setEditingId(product._id);
@@ -120,6 +122,22 @@ export function ProductsGrid({ products, loading, onCreateProduct, onUpdateProdu
     }
     setSaving(false);
   };
+
+  const handleDelete = async (productId: string, productTitle: string) => {
+    if (!onDeleteProduct) return;
+    
+    if (!confirm(`Are you sure you want to delete "${productTitle}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeleting(productId);
+    const success = await onDeleteProduct(productId);
+    if (!success) {
+      alert('Failed to delete product. It may be in use by existing orders.');
+    }
+    setDeleting(null);
+  };
+  
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-sm border p-6">
@@ -319,6 +337,16 @@ export function ProductsGrid({ products, loading, onCreateProduct, onUpdateProdu
                         >
                           <Edit2 size={16} />
                         </button>
+                        {onDeleteProduct && (
+                          <button
+                            onClick={() => handleDelete(product._id, product.title)}
+                            disabled={deleting === product._id}
+                            className="text-red-600 hover:text-red-800 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                            title="Delete"
+                          >
+                            {deleting === product._id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>

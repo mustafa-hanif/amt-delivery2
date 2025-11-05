@@ -130,6 +130,17 @@ export class AdminService {
     }
   }
 
+  async deleteProduct(id: string): Promise<boolean> {
+    try {
+      const client = this.getClient();
+      await client.mutation(api.admin.deleteProduct, { id: id as any });
+      return true;
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      return false;
+    }
+  }
+
   // Driver methods
   async getDrivers(): Promise<Driver[]> {
     try {
